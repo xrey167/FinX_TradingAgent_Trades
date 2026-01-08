@@ -25,72 +25,99 @@ export class HourOfDayExtractor implements PeriodExtractor {
  * Market Session Extractor
  * Groups hours into trading sessions (Pre-Market, Open, Lunch, Power Hour, After Hours)
  * Requires: hourly timeframe data
- * Note: Uses US market hours (EST)
+ * Note: Uses US market hours (EST/EDT) with DST-aware conversion
  */
 export class MarketSessionExtractor implements PeriodExtractor {
   type: PeriodType = 'market-session';
   requiredTimeframe = 'hourly' as const;
 
+  /**
+   * Check if a date is in Daylight Saving Time (DST) for US Eastern Time
+   * DST runs from 2nd Sunday in March at 2:00 AM to 1st Sunday in November at 2:00 AM
+   */
+  private isDST(date: Date): boolean {
+    const year = date.getFullYear();
+
+    // Find 2nd Sunday in March
+    const marchFirst = new Date(Date.UTC(year, 2, 1)); // March 1st UTC
+    const marchDayOfWeek = marchFirst.getUTCDay();
+    const dstStart = new Date(Date.UTC(year, 2, 8 + ((7 - marchDayOfWeek) % 7))); // 2nd Sunday
+    dstStart.setUTCHours(7, 0, 0, 0); // 2:00 AM EST = 7:00 UTC
+
+    // Find 1st Sunday in November
+    const novFirst = new Date(Date.UTC(year, 10, 1)); // November 1st UTC
+    const novDayOfWeek = novFirst.getUTCDay();
+    const dstEnd = new Date(Date.UTC(year, 10, 1 + ((7 - novDayOfWeek) % 7))); // 1st Sunday
+    dstEnd.setUTCHours(6, 0, 0, 0); // 2:00 AM EDT = 6:00 UTC
+
+    return date >= dstStart && date < dstEnd;
+  }
+
   extract(timestamp: number): string | null {
     const date = new Date(timestamp);
 
-    // Convert to EST/EDT (UTC-5 or UTC-4 depending on DST)
-    // For simplicity, we'll work with UTC and adjust
+    // Determine UTC offset based on DST
+    // EST (winter): UTC-5 (5 hours behind)
+    // EDT (summer/DST): UTC-4 (4 hours behind)
+    const utcOffset = this.isDST(date) ? 4 : 5;
+
     const hour = date.getUTCHours();
     const minute = date.getUTCMinutes();
     const totalMinutes = hour * 60 + minute;
 
-    // US Market hours in EST:
-    // Pre-market: 4:00am - 9:30am EST = 9:00 - 14:30 UTC (EST = UTC-5)
-    // Market Open: 9:30am - 11:00am EST = 14:30 - 16:00 UTC
-    // Mid-Day: 11:00am - 12:00pm EST = 16:00 - 17:00 UTC
-    // Lunch Hour: 12:00pm - 1:00pm EST = 17:00 - 18:00 UTC
-    // Afternoon: 1:00pm - 3:00pm EST = 18:00 - 20:00 UTC
-    // Power Hour: 3:00pm - 4:00pm EST = 20:00 - 21:00 UTC
-    // After Hours: 4:00pm - 8:00pm EST = 21:00 - 1:00 UTC (next day)
+    // US Market hours in ET (Eastern Time):
+    // Pre-market: 4:00am - 9:30am ET
+    // Market Open: 9:30am - 11:00am ET
+    // Mid-Day: 11:00am - 12:00pm ET
+    // Lunch Hour: 12:00pm - 1:00pm ET
+    // Afternoon: 1:00pm - 3:00pm ET
+    // Power Hour: 3:00pm - 4:00pm ET
+    // After Hours: 4:00pm - 8:00pm ET
 
-    // Note: This is a simplified version assuming EST (UTC-5)
-    // A production version should handle DST properly
+    // Convert ET times to UTC based on current DST status
+    const preMarketStart = (4 + utcOffset) * 60; // 4:00 AM ET
+    const marketOpenStart = (9 * 60 + 30) + (utcOffset * 60); // 9:30 AM ET
+    const midDayStart = (11 + utcOffset) * 60; // 11:00 AM ET
+    const lunchStart = (12 + utcOffset) * 60; // 12:00 PM ET
+    const afternoonStart = (13 + utcOffset) * 60; // 1:00 PM ET
+    const powerHourStart = (15 + utcOffset) * 60; // 3:00 PM ET
+    const afterHoursStart = (16 + utcOffset) * 60; // 4:00 PM ET
+    const afterHoursEnd = (20 + utcOffset) * 60; // 8:00 PM ET
 
-    // Pre-Market (4:00am - 9:30am EST)
-    if (totalMinutes >= 540 && totalMinutes < 870) {
-      // 9:00 - 14:30 UTC
+    // Pre-Market (4:00am - 9:30am ET)
+    if (totalMinutes >= preMarketStart && totalMinutes < marketOpenStart) {
       return 'Pre-Market';
     }
 
-    // Market Open (9:30am - 11:00am EST)
-    if (totalMinutes >= 870 && totalMinutes < 960) {
-      // 14:30 - 16:00 UTC
+    // Market Open (9:30am - 11:00am ET)
+    if (totalMinutes >= marketOpenStart && totalMinutes < midDayStart) {
       return 'Market-Open';
     }
 
-    // Mid-Day (11:00am - 12:00pm EST)
-    if (totalMinutes >= 960 && totalMinutes < 1020) {
-      // 16:00 - 17:00 UTC
+    // Mid-Day (11:00am - 12:00pm ET)
+    if (totalMinutes >= midDayStart && totalMinutes < lunchStart) {
       return 'Mid-Day';
     }
 
-    // Lunch Hour (12:00pm - 1:00pm EST)
-    if (totalMinutes >= 1020 && totalMinutes < 1080) {
-      // 17:00 - 18:00 UTC
+    // Lunch Hour (12:00pm - 1:00pm ET)
+    if (totalMinutes >= lunchStart && totalMinutes < afternoonStart) {
       return 'Lunch-Hour';
     }
 
-    // Afternoon (1:00pm - 3:00pm EST)
-    if (totalMinutes >= 1080 && totalMinutes < 1200) {
-      // 18:00 - 20:00 UTC
+    // Afternoon (1:00pm - 3:00pm ET)
+    if (totalMinutes >= afternoonStart && totalMinutes < powerHourStart) {
       return 'Afternoon';
     }
 
-    // Power Hour (3:00pm - 4:00pm EST)
-    if (totalMinutes >= 1200 && totalMinutes < 1260) {
-      // 20:00 - 21:00 UTC
+    // Power Hour (3:00pm - 4:00pm ET)
+    if (totalMinutes >= powerHourStart && totalMinutes < afterHoursStart) {
       return 'Power-Hour';
     }
 
-    // After Hours (4:00pm - 8:00pm EST)
-    if (totalMinutes >= 1260 || totalMinutes < 60) {
-      // 21:00 - 1:00 UTC (wraps to next day)
+    // After Hours (4:00pm - 8:00pm ET)
+    // Handle wrap-around for after-hours extending past midnight
+    if (totalMinutes >= afterHoursStart || totalMinutes < (utcOffset * 60 - 240)) {
+      // After hours can wrap to next day (8 PM ET - 12 AM ET next day)
       return 'After-Hours';
     }
 

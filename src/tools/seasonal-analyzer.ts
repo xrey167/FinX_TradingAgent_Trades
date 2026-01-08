@@ -577,10 +577,14 @@ Cached for 24-48 hours depending on timeframe.`,
         }
       );
 
+      // Calculate API cost based on timeframe
+      const dataFetcher = getDataFetcher(timeframe as SeasonalTimeframe);
+      const apiCost = dataFetcher.getCostEstimate();
+
       return formatToolResult(analysis, {
         sourceUrl: `https://eodhd.com/api/eod/${symbol}`,
         timestamp: new Date().toISOString(),
-        apiCost: 1,
+        apiCost,
       });
     } catch (error) {
       return formatToolError(error, 'Error analyzing seasonal patterns');
