@@ -26,7 +26,21 @@ import {
 } from './seasonal-patterns/index.ts';
 import type { CandleData, SeasonalTimeframe } from './seasonal-patterns/index.ts';
 import { EventCalendar } from './seasonal-patterns/event-calendar.ts';
-import { FOMCWeekExtractor, OptionsExpiryWeekExtractor, EarningsSeasonExtractor } from './seasonal-patterns/event-extractors.ts';
+import {
+  FOMCWeekExtractor,
+  OptionsExpiryWeekExtractor,
+  EarningsSeasonExtractor,
+  TripleWitchingExtractor,
+  GDPExtractor,
+  ElectionExtractor,
+} from './seasonal-patterns/event-extractors.ts';
+import { CPIExtractor, NFPExtractor } from './seasonal-patterns/cpi-nfp-extractors.ts';
+import {
+  FedRateDecisionExtractor,
+  ECBDecisionExtractor,
+  BoEDecisionExtractor,
+  BoJDecisionExtractor,
+} from './seasonal-patterns/central-bank-extractors.ts';
 import * as path from 'path';
 
 const inputSchema = z.object({
@@ -41,6 +55,11 @@ const inputSchema = z.object({
     .array(z.string())
     .optional()
     .describe('Specific patterns to analyze (e.g., ["month-of-year", "hour-of-day"]). If not specified, uses default patterns for timeframe.'),
+  includeEvents: z
+    .boolean()
+    .optional()
+    .default(true)
+    .describe('Include economic event analysis (CPI, NFP, FOMC, Fed Rate, ECB, BoE, BoJ, GDP, Triple Witching, Elections, etc.). Default: true.'),
 });
 
 interface MonthlyStats {
@@ -136,9 +155,9 @@ Cached for 24-48 hours depending on timeframe.`,
   async (input) => {
     try {
       requireEnvVar('EODHD_API_KEY');
-      const { symbol, years, timeframe = 'daily', patterns } = input;
-      // Schema version v5: Added week positioning patterns (week-of-month, day-of-month, week positions)
-      const cacheKey = createCacheKey('analyze_seasonal_v5', { symbol, years, timeframe });
+      const { symbol, years, timeframe = 'daily', patterns, includeEvents = true } = input;
+      // Schema version v6: Added Phase 5 economic events (CPI, NFP, Fed, ECB, BoE, BoJ, GDP, Triple Witching, Elections)
+      const cacheKey = createCacheKey('analyze_seasonal_v6', { symbol, years, timeframe, includeEvents });
 
       // Cache TTL: 48 hours for hourly (user decision), 24 hours for daily
       const cacheTTL = timeframe === 'hourly' ? 48 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
@@ -409,38 +428,45 @@ Cached for 24-48 hours depending on timeframe.`,
             });
           }
 
-          // Analyze event-based patterns (FOMC weeks, options expiry, earnings seasons)
+          // Analyze event-based patterns (Phase 5: 12 economic events)
           let eventBasedStats: EventBasedStats[] | undefined;
-          if (timeframe === 'daily') {
+          if (timeframe === 'daily' && includeEvents) {
             try {
               // Try to load event calendar config (optional)
               const eventConfigPath = path.join(process.cwd(), '.claude', 'seasonal-events.json');
               const calendar = EventCalendar.fromFile(eventConfigPath);
 
-              // Extract event periods
-              const fomcExtractor = new FOMCWeekExtractor(calendar);
-              const optionsExtractor = new OptionsExpiryWeekExtractor(calendar);
-              const earningsExtractor = new EarningsSeasonExtractor(calendar);
+              // Initialize all event extractors (12 total from Phase 5)
+              const extractors = [
+                // Original 3 extractors
+                new FOMCWeekExtractor(calendar),
+                new OptionsExpiryWeekExtractor(calendar),
+                new EarningsSeasonExtractor(calendar),
+
+                // Phase 5: High-impact events (Issues #4-#9)
+                new CPIExtractor(calendar),
+                new NFPExtractor(calendar),
+                new TripleWitchingExtractor(calendar),
+                new GDPExtractor(calendar),
+                new FedRateDecisionExtractor(calendar),
+                new ECBDecisionExtractor(),
+                new BoEDecisionExtractor(),
+                new BoJDecisionExtractor(),
+
+                // Phase 5: Medium-impact events (Issues #13)
+                new ElectionExtractor(calendar),
+              ];
 
               const eventData: Record<string, number[]> = {};
 
+              // Extract all event periods
               for (const point of priceData) {
-                const fomcWeek = fomcExtractor.extract(point.date.getTime());
-                if (fomcWeek) {
-                  if (!eventData[fomcWeek]) eventData[fomcWeek] = [];
-                  eventData[fomcWeek]?.push(point.return);
-                }
-
-                const optionsWeek = optionsExtractor.extract(point.date.getTime());
-                if (optionsWeek) {
-                  if (!eventData[optionsWeek]) eventData[optionsWeek] = [];
-                  eventData[optionsWeek]?.push(point.return);
-                }
-
-                const earningsSeason = earningsExtractor.extract(point.date.getTime());
-                if (earningsSeason) {
-                  if (!eventData[earningsSeason]) eventData[earningsSeason] = [];
-                  eventData[earningsSeason]?.push(point.return);
+                for (const extractor of extractors) {
+                  const result = extractor.extract(point.date.getTime());
+                  if (result) {
+                    if (!eventData[result]) eventData[result] = [];
+                    eventData[result]?.push(point.return);
+                  }
                 }
               }
 
@@ -454,11 +480,17 @@ Cached for 24-48 hours depending on timeframe.`,
                   : 0;
                 const volatility = Math.sqrt(variance);
 
-                // Determine impact level
+                // Determine impact level based on event type
                 let impact: 'high' | 'medium' | 'low' = 'medium';
-                if (event.includes('FOMC')) impact = 'high';
-                else if (event.includes('Options')) impact = 'medium';
-                else if (event.includes('Earnings')) impact = 'medium';
+                if (event.includes('CPI') || event.includes('NFP') || event.includes('FOMC') ||
+                    event.includes('Fed') || event.includes('Triple-Witching') || event.includes('GDP')) {
+                  impact = 'high';
+                } else if (event.includes('ECB') || event.includes('BoE') || event.includes('BoJ') ||
+                           event.includes('Options') || event.includes('Election')) {
+                  impact = 'medium';
+                } else if (event.includes('Earnings')) {
+                  impact = 'medium';
+                }
 
                 return {
                   event,
@@ -468,6 +500,13 @@ Cached for 24-48 hours depending on timeframe.`,
                   sampleSize: filtered.length,
                   impact,
                 };
+              }).sort((a, b) => {
+                // Sort by impact (high first), then by avgReturn
+                if (a.impact !== b.impact) {
+                  const impactOrder = { high: 0, medium: 1, low: 2 };
+                  return impactOrder[a.impact] - impactOrder[b.impact];
+                }
+                return Math.abs(b.avgReturn) - Math.abs(a.avgReturn);
               });
             } catch (error) {
               // Event calendar not configured - skip event analysis
