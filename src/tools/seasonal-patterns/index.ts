@@ -53,4 +53,23 @@ export {
   OptionsExpiryWeekExtractor,
   EarningsSeasonExtractor,
   GenericEventExtractor,
+  TripleWitchingExtractor,
+  GDPExtractor,
+  ElectionExtractor,
+  DividendExDateExtractor,
+  IndexRebalancingExtractor,
 } from './event-extractors.ts';
+
+// Export CPI and NFP extractors (Issues #4 and #5)
+export {
+  CPIExtractor,
+  NFPExtractor,
+} from './cpi-nfp-extractors.ts';
+
+// Export central bank decision extractors (Issues #8 and #9)
+export {
+  FedRateDecisionExtractor,
+  ECBDecisionExtractor,
+  BoEDecisionExtractor,
+  BoJDecisionExtractor,
+} from './central-bank-extractors.ts';

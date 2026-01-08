@@ -13,7 +13,8 @@ export type PeriodType =
   | 'week-of-month'
   | 'week-of-year'
   | 'week-position' // "first-monday", "last-friday", etc.
-  | 'market-session'; // "pre-market", "open", "lunch", "close"
+  | 'market-session' // "pre-market", "open", "lunch", "close"
+  | 'custom-event'; // FOMC, options expiry, earnings, elections, etc.
 
 export interface SeasonalPattern {
   period: PeriodType;
