@@ -1,112 +1,90 @@
 {
-  "$schema": "https://json-schema.org/draft-07/schema#",
-  "description": "Seasonal Events Configuration - Define custom events for event-based seasonal analysis",
-
-  "fomc_meetings": [
-    "2024-01-31",
-    "2024-03-20",
-    "2024-05-01",
-    "2024-06-12",
-    "2024-07-31",
-    "2024-09-18",
-    "2024-11-07",
-    "2024-12-18",
-    "2025-01-29",
-    "2025-03-19",
-    "2025-05-07",
-    "2025-06-18",
-    "2025-07-30",
-    "2025-09-17",
-    "2025-11-05",
-    "2025-12-17",
-    "2026-01-28",
-    "2026-03-18",
-    "2026-04-29",
-    "2026-06-17",
-    "2026-07-29",
-    "2026-09-23",
-    "2026-11-04",
-    "2026-12-16"
-  ],
-
+  "$schema": "./seasonal-events.schema.json",
+  "version": "1.0.0",
+  "description": "User-defined custom events for seasonal pattern analysis",
   "custom_events": [
-    {
-      "date": "2024-11-05",
-      "name": "US Election Day",
-      "type": "political",
-      "impact": "high",
-      "description": "Presidential election typically creates volatility"
-    },
     {
       "date": "2024-01-15",
       "name": "AAPL Earnings",
       "type": "earnings",
       "ticker": "AAPL.US",
       "impact": "high",
-      "description": "Apple Q4 earnings report"
+      "description": "Apple Q1 2024 earnings report"
     },
     {
-      "date": "2024-10-31",
-      "name": "FOMC Rate Decision",
-      "type": "economic",
-      "impact": "high",
-      "description": "Federal Reserve interest rate announcement"
-    },
-    {
-      "date": "2024-12-31",
-      "name": "Year-End Rebalancing",
-      "type": "market_structure",
+      "date": "2024-02-20",
+      "name": "NVDA Product Launch",
+      "type": "product-launch",
+      "ticker": "NVDA.US",
       "impact": "medium",
-      "description": "Institutional portfolio rebalancing"
+      "description": "NVIDIA new GPU architecture announcement"
+    },
+    {
+      "date": "2024-03-15",
+      "dateRange": {
+        "start": "2024-03-15",
+        "end": "2024-03-17"
+      },
+      "name": "Tech Industry Conference",
+      "type": "conference",
+      "impact": "medium",
+      "description": "Major technology industry conference with CEO presentations"
+    },
+    {
+      "date": "2024-04-10",
+      "name": "Sector Rotation Event",
+      "type": "sector-rotation",
+      "impact": "low",
+      "description": "Expected rotation from growth to value stocks"
+    },
+    {
+      "date": "2024-06-21",
+      "name": "Analyst Day",
+      "type": "analyst-day",
+      "ticker": "TSLA.US",
+      "impact": "high",
+      "description": "Tesla Investor and Analyst Day"
+    },
+    {
+      "date": "2024-11-15",
+      "name": "Black Friday Week",
+      "type": "retail-event",
+      "impact": "high",
+      "description": "Black Friday shopping season begins"
     }
   ],
-
-  "options_expiry": {
-    "enabled": true,
-    "type": "monthly_third_friday",
-    "description": "Standard monthly options expiration (3rd Friday)",
-    "impact": "medium"
-  },
-
-  "quarterly_earnings_seasons": {
-    "enabled": true,
-    "months": [1, 4, 7, 10],
-    "description": "Typical earnings season months (Jan, Apr, Jul, Oct)",
-    "impact": "medium"
-  },
-
-  "market_holidays": [
-    {
-      "date": "2024-01-01",
-      "name": "New Year's Day",
-      "market": "US",
-      "closed": true
+  "event_types": {
+    "earnings": {
+      "description": "Company earnings reports",
+      "default_impact": "high"
     },
-    {
-      "date": "2024-12-25",
-      "name": "Christmas Day",
-      "market": "US",
-      "closed": true
+    "product-launch": {
+      "description": "Product launches and announcements",
+      "default_impact": "medium"
     },
-    {
-      "date": "2024-07-04",
-      "name": "Independence Day",
-      "market": "US",
-      "closed": true
+    "conference": {
+      "description": "Industry conferences and events",
+      "default_impact": "medium"
     },
-    {
-      "date": "2024-11-28",
-      "name": "Thanksgiving",
-      "market": "US",
-      "closed": true
+    "sector-rotation": {
+      "description": "Sector rotation events",
+      "default_impact": "low"
+    },
+    "analyst-day": {
+      "description": "Company investor and analyst days",
+      "default_impact": "high"
+    },
+    "retail-event": {
+      "description": "Retail seasonal events (Black Friday, Cyber Monday, etc.)",
+      "default_impact": "medium"
+    },
+    "regulatory": {
+      "description": "Regulatory announcements and decisions",
+      "default_impact": "high"
+    },
+    "merger-acquisition": {
+      "description": "Merger and acquisition announcements",
+      "default_impact": "high"
     }
-  ],
-
-  "notes": [
-    "Copy this file to .claude/seasonal-events.json to use custom events",
-    "Dates should be in ISO 8601 format (YYYY-MM-DD)",
-    "Impact levels: high, medium, low",
-    "Event types: fomc, earnings, economic, political, market_structure, holiday",
-    "Update FOMC dates annually from federalreserve.gov calendar"
-  ]
+  }
 }
