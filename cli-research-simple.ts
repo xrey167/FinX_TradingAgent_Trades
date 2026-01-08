@@ -76,7 +76,12 @@ async function simpleResearch(symbol: string) {
     console.log(`P/E Ratio: ${highlights.PERatio?.toFixed(2) || 'N/A'}`);
     console.log(`P/B Ratio: ${valuation.PriceBookMRQ?.toFixed(2) || 'N/A'}`);
     console.log(`EV/EBITDA: ${valuation.EnterpriseValueEbitda?.toFixed(2) || 'N/A'}`);
-    console.log(`PEG Ratio: ${highlights.PEGRatio?.toFixed(2) || 'N/A'}`);
+
+    // Calculate PEG ratio ourselves (API value often incorrect)
+    const calculatedPEG = highlights.PERatio && highlights.QuarterlyEarningsGrowthYOY && highlights.QuarterlyEarningsGrowthYOY > 0
+      ? (highlights.PERatio / (highlights.QuarterlyEarningsGrowthYOY * 100)).toFixed(2)
+      : null;
+    console.log(`PEG Ratio: ${calculatedPEG || highlights.PEGRatio?.toFixed(2) || 'N/A'}${calculatedPEG ? ' (calculated)' : ''}`);
     console.log('');
 
     // Profitability
@@ -91,8 +96,8 @@ async function simpleResearch(symbol: string) {
     // Growth
     console.log('📈 GROWTH');
     console.log('-'.repeat(60));
-    console.log(`Revenue Growth (YoY): ${highlights.QuarterlyRevenueGrowthYOY ? (highlights.QuarterlyRevenueGrowthYOY * 100).toFixed(1) + '%' : 'N/A'}`);
-    console.log(`Earnings Growth (YoY): ${highlights.QuarterlyEarningsGrowthYOY ? (highlights.QuarterlyEarningsGrowthYOY * 100).toFixed(1) + '%' : 'N/A'}`);
+    console.log(`Revenue Growth (Quarterly YoY): ${highlights.QuarterlyRevenueGrowthYOY ? (highlights.QuarterlyRevenueGrowthYOY * 100).toFixed(1) + '%' : 'N/A'}`);
+    console.log(`Earnings Growth (Quarterly YoY): ${highlights.QuarterlyEarningsGrowthYOY ? (highlights.QuarterlyEarningsGrowthYOY * 100).toFixed(1) + '%' : 'N/A'}`);
     console.log(`EPS Estimate Next Quarter: ${highlights.EPSEstimateNextQuarter || 'N/A'}`);
     console.log('');
 
@@ -101,8 +106,8 @@ async function simpleResearch(symbol: string) {
     const mostRecentQuarter = Object.keys(balanceSheetQuarterly)[0];
     const recentBalanceSheet = mostRecentQuarter ? balanceSheetQuarterly[mostRecentQuarter] : null;
 
-    const debtToEquity = recentBalanceSheet && recentBalanceSheet.totalStockholderEquity
-      ? (recentBalanceSheet.totalLiab / recentBalanceSheet.totalStockholderEquity)
+    const debtToEquity = recentBalanceSheet?.netDebt !== undefined && recentBalanceSheet.totalStockholderEquity
+      ? (recentBalanceSheet.netDebt / recentBalanceSheet.totalStockholderEquity)
       : null;
     const currentRatio = recentBalanceSheet && recentBalanceSheet.totalCurrentLiabilities
       ? (recentBalanceSheet.totalCurrentAssets / recentBalanceSheet.totalCurrentLiabilities)
