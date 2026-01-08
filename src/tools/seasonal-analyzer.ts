@@ -239,30 +239,47 @@ Uses historical data to quantify seasonal edge. Costs 1 API call per request.`,
           // Identify famous seasonal patterns
           const patterns: SeasonalPattern[] = [];
 
-          // Santa Rally (last week of December)
-          const decemberReturns = monthlyData['December']?.returns || [];
-          if (decemberReturns.length > 0) {
-            const avgReturn = decemberReturns.reduce((a, b) => a + b, 0) / decemberReturns.length;
-            const positive = decemberReturns.filter(r => r > 0).length;
+          // Santa Rally (last week of December - typically last 5-7 trading days)
+          const santaRallyReturns: number[] = [];
+          for (const point of priceData) {
+            const month = point.date.getMonth();
+            const day = point.date.getDate();
+            // Last week of December (days 24-31)
+            if (month === 11 && day >= 24) {
+              santaRallyReturns.push(point.return);
+            }
+          }
+          if (santaRallyReturns.length > 0) {
+            const filtered = santaRallyReturns.filter(r => !isNaN(r));
+            const avgReturn = filtered.reduce((a, b) => a + b, 0) / filtered.length;
+            const positive = filtered.filter(r => r > 0).length;
             patterns.push({
               name: 'Santa Rally',
-              period: 'Late December',
+              period: 'Late December (Dec 24-31)',
               avgReturn,
-              winRate: (positive / decemberReturns.length) * 100,
+              winRate: (positive / filtered.length) * 100,
               description: 'Traditional year-end rally in stocks',
             });
           }
 
-          // Sell in May and Go Away
-          const mayReturns = monthlyData['May']?.returns || [];
-          if (mayReturns.length > 0) {
-            const avgReturn = mayReturns.reduce((a, b) => a + b, 0) / mayReturns.length;
-            const positive = mayReturns.filter(r => r > 0).length;
+          // Sell in May and Go Away (May through October)
+          const sellInMayReturns: number[] = [];
+          for (const point of priceData) {
+            const month = point.date.getMonth();
+            // May (4) through October (9)
+            if (month >= 4 && month <= 9) {
+              sellInMayReturns.push(point.return);
+            }
+          }
+          if (sellInMayReturns.length > 0) {
+            const filtered = sellInMayReturns.filter(r => !isNaN(r));
+            const avgReturn = filtered.reduce((a, b) => a + b, 0) / filtered.length;
+            const positive = filtered.filter(r => r > 0).length;
             patterns.push({
               name: 'Sell in May',
               period: 'May - October',
-              avgReturn: avgReturn * -1, // Inverted for "sell"
-              winRate: ((mayReturns.length - positive) / mayReturns.length) * 100,
+              avgReturn, // Actual average return (negative means weakness)
+              winRate: (positive / filtered.length) * 100,
               description: 'Summer doldrums - historically weak period',
             });
           }
@@ -370,8 +387,10 @@ function generateInsights(
   }
 
   // Quarterly insights
-  const strongQuarter = quarterlyStats.reduce((a, b) => a.avgReturn > b.avgReturn ? a : b);
-  insights.push(`Strongest quarter: ${strongQuarter.quarter} (avg return: ${strongQuarter.avgReturn.toFixed(2)}%)`);
+  if (quarterlyStats.length > 0) {
+    const strongQuarter = quarterlyStats.reduce((a, b) => a.avgReturn > b.avgReturn ? a : b);
+    insights.push(`Strongest quarter: ${strongQuarter.quarter} (avg return: ${strongQuarter.avgReturn.toFixed(2)}%)`);
+  }
 
   // Day of week insights
   const strongDays = dayOfWeekStats.filter(d => d.winRate > 52);
