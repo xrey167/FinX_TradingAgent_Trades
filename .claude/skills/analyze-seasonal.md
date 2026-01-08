@@ -203,6 +203,54 @@ Data Points: 1,260 trading days
 Always combine with fundamental and technical analysis.
 ```
 
+### Week Positioning Analysis Example (Phase 4)
+
+```
+📊 WEEK POSITIONING ANALYSIS: SPY.US (5 Years)
+============================================================
+Timeframe: daily
+Data Points: 1,255 trading days
+
+📅 WEEK POSITION PATTERNS (Intramonth):
+✅ Week4-Monday: +0.436% avg, 78.6% win rate (14 samples) - STRONGEST
+✅ Week2-Wednesday: +0.350% avg, 68.3% win rate (60 samples)
+⚠️ Week3-Friday: -0.215% avg, 40.4% win rate (47 samples) - WEAKEST
+
+📊 WEEK OF MONTH PATTERNS:
+1. Week-4 (Days 22-28): +0.142% avg, 59.4% win rate (288 samples) ✅ BEST
+2. Week-2 (Days 8-14): +0.099% avg, 57.9% win rate (299 samples)
+3. Week-1 (Days 1-7): +0.050% avg, 53.9% win rate (284 samples)
+4. Week-5 (Days 29-31): -0.042% avg, 49.0% win rate (100 samples)
+5. Week-3 (Days 15-21): -0.049% avg, 48.2% win rate (284 samples) ⚠️ WORST
+
+📆 DAY OF MONTH PATTERNS (Top 5 / Bottom 5):
+Top 5 Best Days:
+  1. Day-24: +0.373% avg, 70.7% win rate (41 samples)
+  2. Day-02: +0.252% avg, 65.0% win rate (40 samples)
+  3. Day-23: +0.237% avg, 65.9% win rate (41 samples)
+  4. Day-28: +0.217% avg, 59.5% win rate (42 samples)
+  5. Day-15: +0.206% avg, 58.5% win rate (41 samples)
+
+Bottom 5 Worst Days:
+  1. Day-18: -0.295% avg, 51.2% win rate (41 samples)
+  2. Day-16: -0.194% avg, 41.5% win rate (41 samples)
+  3. Day-30: -0.160% avg, 40.5% win rate (37 samples)
+  4. Day-03: -0.157% avg, 53.5% win rate (43 samples)
+  5. Day-26: -0.140% avg, 51.2% win rate (41 samples)
+
+🔄 TURN-OF-MONTH EFFECT (Days 1-3 & 28-31):
+   Average Return: +0.053%
+   Average Win Rate: 54.2%
+   Status: ✅ POSITIVE EFFECT (confirmed)
+
+💡 WEEK POSITIONING INSIGHTS:
+1. Week-4 shows strongest performance (59.4% win rate)
+2. Avoid Week3-Friday (40.4% win rate - weakest position)
+3. Turn-of-month effect detected (54.2% win rate)
+4. Week4-Monday has highest edge (78.6% win rate, small sample)
+5. Week-3 (mid-month) historically weakest
+```
+
 ### Hourly Analysis Example
 
 ```
@@ -306,6 +354,15 @@ Combine with news flow and volatility expectations for best results.
 - Be aware of high-volatility sessions (Pre-Market, Market-Open) - wider stops needed
 - Best edge typically in Lunch-Hour and Afternoon sessions
 - Use hour-of-day patterns to time entries within your trading day
+
+**For Week Positioning (Intramonth Patterns):**
+- Week-4 (end of month) typically strongest - consider adding during Week-3
+- Turn-of-month effect (days 1-3 & 28-31) shows positive bias
+- Avoid Week3-Friday if historically weak (check symbol-specific data)
+- Week positioning helps with entry timing within each month
+- Combine with monthly seasonality for multi-timeframe confirmation
+- Week-of-month patterns vary by symbol - always check recent history
+- Day-of-month patterns help time exact entry/exit dates
 
 **For Event-Aware Trading:**
 - Monitor FOMC meeting dates (8 times per year) - high-impact events

@@ -16,7 +16,14 @@ import { z } from 'zod';
 import { getEODHDClient } from '../lib/eodhd-client-singleton.ts';
 import { globalToolCache } from '../lib/tool-cache.ts';
 import { formatToolResult, formatToolError, requireEnvVar, createCacheKey } from './helpers.ts';
-import { getDataFetcher, HourOfDayExtractor, MarketSessionExtractor } from './seasonal-patterns/index.ts';
+import {
+  getDataFetcher,
+  HourOfDayExtractor,
+  MarketSessionExtractor,
+  WeekPositionExtractor,
+  WeekOfMonthExtractor,
+  DayOfMonthExtractor,
+} from './seasonal-patterns/index.ts';
 import type { CandleData, SeasonalTimeframe } from './seasonal-patterns/index.ts';
 import { EventCalendar } from './seasonal-patterns/event-calendar.ts';
 import { FOMCWeekExtractor, OptionsExpiryWeekExtractor, EarningsSeasonExtractor } from './seasonal-patterns/event-extractors.ts';
@@ -82,6 +89,27 @@ interface EventBasedStats {
   impact: 'high' | 'medium' | 'low';
 }
 
+interface WeekPositionStats {
+  position: string; // "First-Monday", "Last-Friday", etc.
+  avgReturn: number;
+  winRate: number;
+  sampleSize: number;
+}
+
+interface WeekOfMonthStats {
+  week: string; // "Week-1", "Week-2", etc.
+  avgReturn: number;
+  winRate: number;
+  sampleSize: number;
+}
+
+interface DayOfMonthStats {
+  day: string; // "Day-1", "Day-15", etc.
+  avgReturn: number;
+  winRate: number;
+  sampleSize: number;
+}
+
 interface SeasonalPattern {
   name: string;
   period: string;
@@ -109,8 +137,8 @@ Cached for 24-48 hours depending on timeframe.`,
     try {
       requireEnvVar('EODHD_API_KEY');
       const { symbol, years, timeframe = 'daily', patterns } = input;
-      // Schema version v4: Added event-based patterns (FOMC, options expiry, earnings)
-      const cacheKey = createCacheKey('analyze_seasonal_v4', { symbol, years, timeframe });
+      // Schema version v5: Added week positioning patterns (week-of-month, day-of-month, week positions)
+      const cacheKey = createCacheKey('analyze_seasonal_v5', { symbol, years, timeframe });
 
       // Cache TTL: 48 hours for hourly (user decision), 24 hours for daily
       const cacheTTL = timeframe === 'hourly' ? 48 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
@@ -447,6 +475,106 @@ Cached for 24-48 hours depending on timeframe.`,
             }
           }
 
+          // Analyze week positioning patterns (only for daily timeframe)
+          let weekPositionStats: WeekPositionStats[] | undefined;
+          let weekOfMonthStats: WeekOfMonthStats[] | undefined;
+          let dayOfMonthStats: DayOfMonthStats[] | undefined;
+
+          if (timeframe === 'daily') {
+            // Week Position (First-Monday, Last-Friday, etc.)
+            const weekPosExtractor = new WeekPositionExtractor();
+            const weekPosData: Record<string, number[]> = {};
+
+            for (const point of priceData) {
+              const position = weekPosExtractor.extract(point.date.getTime());
+              if (position) {
+                if (!weekPosData[position]) weekPosData[position] = [];
+                weekPosData[position]?.push(point.return);
+              }
+            }
+
+            weekPositionStats = Object.entries(weekPosData)
+              .map(([position, returns]) => {
+                const filtered = returns.filter(r => !isNaN(r) && isFinite(r));
+                const positive = filtered.filter(r => r > 0).length;
+                const sum = filtered.reduce((a, b) => a + b, 0);
+                const avg = filtered.length > 0 ? sum / filtered.length : 0;
+
+                return {
+                  position,
+                  avgReturn: isFinite(avg) ? avg : 0,
+                  winRate: filtered.length > 0 ? (positive / filtered.length) * 100 : 0,
+                  sampleSize: filtered.length,
+                };
+              })
+              .filter(s => s.sampleSize >= 10); // Minimum sample size
+
+            // Week of Month (Week-1 through Week-5)
+            const weekOfMonthExtractor = new WeekOfMonthExtractor();
+            const weekOfMonthData: Record<string, number[]> = {};
+
+            for (const point of priceData) {
+              const week = weekOfMonthExtractor.extract(point.date.getTime());
+              if (week) {
+                if (!weekOfMonthData[week]) weekOfMonthData[week] = [];
+                weekOfMonthData[week]?.push(point.return);
+              }
+            }
+
+            weekOfMonthStats = Object.entries(weekOfMonthData)
+              .map(([week, returns]) => {
+                const filtered = returns.filter(r => !isNaN(r) && isFinite(r));
+                const positive = filtered.filter(r => r > 0).length;
+                const sum = filtered.reduce((a, b) => a + b, 0);
+                const avg = filtered.length > 0 ? sum / filtered.length : 0;
+
+                return {
+                  week,
+                  avgReturn: isFinite(avg) ? avg : 0,
+                  winRate: filtered.length > 0 ? (positive / filtered.length) * 100 : 0,
+                  sampleSize: filtered.length,
+                };
+              })
+              .sort((a, b) => {
+                const weekA = parseInt(a.week.split('-')[1] || '0');
+                const weekB = parseInt(b.week.split('-')[1] || '0');
+                return weekA - weekB;
+              });
+
+            // Day of Month (Day-1 through Day-31)
+            const dayOfMonthExtractor = new DayOfMonthExtractor();
+            const dayOfMonthData: Record<string, number[]> = {};
+
+            for (const point of priceData) {
+              const day = dayOfMonthExtractor.extract(point.date.getTime());
+              if (day) {
+                if (!dayOfMonthData[day]) dayOfMonthData[day] = [];
+                dayOfMonthData[day]?.push(point.return);
+              }
+            }
+
+            dayOfMonthStats = Object.entries(dayOfMonthData)
+              .map(([day, returns]) => {
+                const filtered = returns.filter(r => !isNaN(r) && isFinite(r));
+                const positive = filtered.filter(r => r > 0).length;
+                const sum = filtered.reduce((a, b) => a + b, 0);
+                const avg = filtered.length > 0 ? sum / filtered.length : 0;
+
+                return {
+                  day,
+                  avgReturn: isFinite(avg) ? avg : 0,
+                  winRate: filtered.length > 0 ? (positive / filtered.length) * 100 : 0,
+                  sampleSize: filtered.length,
+                };
+              })
+              .filter(s => s.sampleSize >= 5) // Minimum sample size
+              .sort((a, b) => {
+                const dayA = parseInt(a.day.split('-')[1] || '0');
+                const dayB = parseInt(b.day.split('-')[1] || '0');
+                return dayA - dayB;
+              });
+          }
+
           // Identify famous seasonal patterns
           const patterns: SeasonalPattern[] = [];
 
@@ -548,6 +676,9 @@ Cached for 24-48 hours depending on timeframe.`,
             ...(hourOfDayStats && { hourOfDayStats }),
             ...(marketSessionStats && { marketSessionStats }),
             ...(eventBasedStats && { eventBasedStats }),
+            ...(weekPositionStats && { weekPositionStats }),
+            ...(weekOfMonthStats && { weekOfMonthStats }),
+            ...(dayOfMonthStats && { dayOfMonthStats }),
             patterns,
 
             summary: {
@@ -598,7 +729,7 @@ Cached for 24-48 hours depending on timeframe.`,
               }),
             },
 
-            insights: generateInsights(monthlyStats, quarterlyStats, dayOfWeekStats, patterns, hourOfDayStats, marketSessionStats, eventBasedStats),
+            insights: generateInsights(monthlyStats, quarterlyStats, dayOfWeekStats, patterns, hourOfDayStats, marketSessionStats, eventBasedStats, weekPositionStats, weekOfMonthStats, dayOfMonthStats),
           };
         }
       );
@@ -628,7 +759,10 @@ function generateInsights(
   patterns: SeasonalPattern[],
   hourOfDayStats?: HourOfDayStats[],
   marketSessionStats?: MarketSessionStats[],
-  eventBasedStats?: EventBasedStats[]
+  eventBasedStats?: EventBasedStats[],
+  weekPositionStats?: WeekPositionStats[],
+  weekOfMonthStats?: WeekOfMonthStats[],
+  dayOfMonthStats?: DayOfMonthStats[]
 ): string[] {
   const insights: string[] = [];
 
@@ -652,6 +786,55 @@ function generateInsights(
         insights.push(
           `Avoid or hedge during: ${worstEvent.event} (${worstEvent.winRate.toFixed(1)}% win rate, ${worstEvent.avgReturn.toFixed(3)}% avg)`
         );
+      }
+    }
+  }
+
+  // Week positioning insights (intramonth patterns)
+  if (weekPositionStats && weekPositionStats.length > 0) {
+    const strongPositions = weekPositionStats.filter(p => p.winRate > 55 && p.sampleSize >= 10);
+    if (strongPositions.length > 0) {
+      const topPositions = strongPositions
+        .sort((a, b) => b.avgReturn - a.avgReturn)
+        .slice(0, 2)
+        .map(p => `${p.position} (${p.winRate.toFixed(1)}% win rate)`);
+      insights.push(`Strong week positions: ${topPositions.join(', ')}`);
+    }
+
+    const weakPositions = weekPositionStats.filter(p => p.winRate < 45 && p.sampleSize >= 10);
+    if (weakPositions.length > 0) {
+      const bottom = weakPositions[0];
+      if (bottom) {
+        insights.push(`Avoid: ${bottom.position} (${bottom.winRate.toFixed(1)}% win rate)`);
+      }
+    }
+  }
+
+  // Week of month insights
+  if (weekOfMonthStats && weekOfMonthStats.length > 0) {
+    const strongWeeks = weekOfMonthStats.filter(w => w.winRate > 55);
+    if (strongWeeks.length > 0) {
+      const topWeek = strongWeeks.sort((a, b) => b.avgReturn - a.avgReturn)[0];
+      if (topWeek) {
+        insights.push(`Best week of month: ${topWeek.week} (${topWeek.winRate.toFixed(1)}% win rate, ${topWeek.avgReturn.toFixed(3)}% avg)`);
+      }
+    }
+  }
+
+  // Day of month insights (turn of month effect, etc.)
+  if (dayOfMonthStats && dayOfMonthStats.length > 0) {
+    // Check for turn-of-month effect (last/first few days)
+    const turnOfMonth = dayOfMonthStats.filter(d => {
+      const dayNum = parseInt(d.day.split('-')[1] || '0');
+      return (dayNum <= 3 || dayNum >= 28) && d.sampleSize >= 10;
+    });
+
+    if (turnOfMonth.length > 0) {
+      const avgTurnReturn = turnOfMonth.reduce((sum, d) => sum + d.avgReturn, 0) / turnOfMonth.length;
+      const avgTurnWinRate = turnOfMonth.reduce((sum, d) => sum + d.winRate, 0) / turnOfMonth.length;
+
+      if (avgTurnWinRate > 52) {
+        insights.push(`Turn-of-month effect detected (${avgTurnWinRate.toFixed(1)}% win rate for days 1-3 & 28-31)`);
       }
     }
   }
