@@ -19,6 +19,7 @@
 import { query, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { fetchMarketDataTool } from './src/tools/market-data.ts';
 import { analyzeRegimeTool } from './src/tools/regime-analyzer.ts';
+import { analyzeSeasonalTool } from './src/tools/seasonal-analyzer.ts';
 import { fetchFinancialDataTool } from './src/tools/fundamental/financial-data.ts';
 import { fetchSentimentDataTool } from './src/tools/sentiment/sentiment-data.ts';
 import { marketAnalystAgent } from './src/agents/market-analyst.ts';
@@ -56,7 +57,7 @@ async function main() {
 
       // Conditional: only if EODHD_API_KEY is set
       ...(process.env.EODHD_API_KEY
-        ? [fetchMarketDataTool, fetchFinancialDataTool, fetchSentimentDataTool]
+        ? [fetchMarketDataTool, fetchFinancialDataTool, fetchSentimentDataTool, analyzeSeasonalTool]
         : []),
     ],
   });
@@ -121,6 +122,7 @@ Please provide a clear BUY/HOLD/SELL recommendation with confidence level.`;
               'fetch_sentiment_data',
               'fetch_market_data',
               'analyze_regime',
+              'analyze_seasonal',
             ],
           },
           'validation-agent': validationAgent,

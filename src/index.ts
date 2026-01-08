@@ -12,6 +12,7 @@
 import { query, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { fetchMarketDataTool } from './tools/market-data.ts';
 import { analyzeRegimeTool } from './tools/regime-analyzer.ts';
+import { analyzeSeasonalTool } from './tools/seasonal-analyzer.ts';
 import { fetchFinancialDataTool } from './tools/fundamental/financial-data.ts';
 import { fetchSentimentDataTool } from './tools/sentiment/sentiment-data.ts';
 import { marketAnalystAgent } from './agents/market-analyst.ts';
@@ -49,7 +50,7 @@ async function main() {
 
       // Conditional: only if EODHD_API_KEY is set
       ...(process.env.EODHD_API_KEY
-        ? [fetchMarketDataTool, fetchFinancialDataTool, fetchSentimentDataTool]
+        ? [fetchMarketDataTool, fetchFinancialDataTool, fetchSentimentDataTool, analyzeSeasonalTool]
         : []),
     ],
   });
@@ -124,6 +125,7 @@ Use the market-analyst agent to perform this analysis systematically.`,
               'fetch_sentiment_data',
               'fetch_market_data',
               'analyze_regime',
+              'analyze_seasonal',
             ],
           },
           'validation-agent': validationAgent,
