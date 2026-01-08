@@ -45,14 +45,25 @@ export class EODHDClient {
   private baseUrl: string;
   private cache: Map<string, { data: any; timestamp: number; ttl: number }>;
   private cacheTTL: number;
-  private requestCount: { minute: number; day: number; lastReset: number };
+  private requestCount: {
+    minute: number;
+    day: number;
+    minuteResetTime: number;
+    dayResetTime: number;
+  };
 
   constructor(config: EODHDConfig) {
     this.apiToken = config.apiToken;
     this.baseUrl = config.baseUrl || EODHD_BASE_URL;
     this.cache = config.cache || new Map();
     this.cacheTTL = config.cacheTTL || 5 * 60 * 1000; // 5 minutes default
-    this.requestCount = { minute: 0, day: 0, lastReset: Date.now() };
+    const now = Date.now();
+    this.requestCount = {
+      minute: 0,
+      day: 0,
+      minuteResetTime: now,
+      dayResetTime: now,
+    };
   }
 
   /**
@@ -283,17 +294,19 @@ export class EODHDClient {
    */
   private checkRateLimits(apiCallCost: number): void {
     const now = Date.now();
-    const timeSinceReset = now - this.requestCount.lastReset;
 
-    // Reset per-minute counter every minute
-    if (timeSinceReset > 60 * 1000) {
+    // Reset per-minute counter every minute (independently)
+    const timeSinceMinuteReset = now - this.requestCount.minuteResetTime;
+    if (timeSinceMinuteReset > 60 * 1000) {
       this.requestCount.minute = 0;
-      this.requestCount.lastReset = now;
+      this.requestCount.minuteResetTime = now;
     }
 
-    // Reset daily counter every 24 hours
-    if (timeSinceReset > 24 * 60 * 60 * 1000) {
+    // Reset daily counter every 24 hours (independently)
+    const timeSinceDayReset = now - this.requestCount.dayResetTime;
+    if (timeSinceDayReset > 24 * 60 * 60 * 1000) {
       this.requestCount.day = 0;
+      this.requestCount.dayResetTime = now;
     }
 
     // Check limits (with 10% buffer for safety)
