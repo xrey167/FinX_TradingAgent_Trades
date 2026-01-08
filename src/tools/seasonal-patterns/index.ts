@@ -1,6 +1,6 @@
 /**
  * Seasonal Patterns Module
- * Multi-timeframe seasonal analysis with pattern extractors
+ * Multi-timeframe seasonal analysis with pattern extractors and event calendar
  */
 
 // Export types
@@ -37,3 +37,20 @@ export {
   getExtractor,
   getCompatibleExtractors,
 } from './extractors.ts';
+
+// Export event calendar and event extractors
+export {
+  EventCalendar,
+} from './event-calendar.ts';
+
+export type {
+  CalendarEvent,
+  EventCalendarConfig,
+} from './event-calendar.ts';
+
+export {
+  FOMCWeekExtractor,
+  OptionsExpiryWeekExtractor,
+  EarningsSeasonExtractor,
+  GenericEventExtractor,
+} from './event-extractors.ts';

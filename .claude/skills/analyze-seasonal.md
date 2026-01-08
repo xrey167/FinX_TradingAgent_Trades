@@ -17,6 +17,7 @@ examples:
   - /analyze-seasonal SPY.US 10
   - /analyze-seasonal SPY.US 2 hourly
   - /analyze-seasonal QQQ.US 1 hourly
+  - /analyze-seasonal SPY.US 5 daily  # includes event-based patterns
 ---
 
 # Analyze Seasonal Patterns
@@ -36,6 +37,13 @@ Analyzes historical price data for {{symbol}} to identify seasonal patterns and 
 - Intraday volatility patterns - Which sessions have highest volatility/risk
 - Win rates and sample sizes for each hour and session
 - API Cost: 5 EODHD API calls | History: 1-2 years | Cache: 48 hours
+
+**Event-Based Analysis** (daily timeframe only):
+- FOMC Week patterns - Federal Reserve meeting weeks (8 times per year)
+- Options Expiry Week - Monthly options expiration (3rd Friday of each month)
+- Earnings Season - Quarterly earnings reporting periods (Jan, Apr, Jul, Oct)
+- Automatic event detection with configurable calendar
+- Identifies high-impact vs low-impact events
 
 ---
 
@@ -224,6 +232,57 @@ Data Points: 1,951 hourly bars
 Use with technical analysis and proper position sizing.
 ```
 
+### Event-Based Analysis Example
+
+```
+📊 EVENT-BASED SEASONAL ANALYSIS: SPY.US (5 Years)
+============================================================
+Timeframe: daily
+Data Points: 1,255 trading days
+
+🎯 MARKET EVENT PATTERNS:
+
+✅ Earnings-Season (Jan, Apr, Jul, Oct) - MEDIUM IMPACT
+   Average Return: +0.073% daily
+   Win Rate: 54.78%
+   Volatility: 1.18%
+   Sample Size: 418 occurrences
+   Status: ✅ POSITIVE BIAS (modest seasonal tailwind)
+
+⚠️ Options-Expiry-Week (3rd Friday) - MEDIUM IMPACT
+   Average Return: -0.052% daily
+   Win Rate: 48.45%
+   Volatility: 1.02%
+   Sample Size: 291 occurrences
+   Status: ⚠️ NEGATIVE BIAS (increased risk week)
+
+➖ FOMC-Week (Federal Reserve Meetings) - HIGH IMPACT
+   Average Return: +0.033% daily
+   Win Rate: 51.90%
+   Volatility: 0.89%
+   Sample Size: 79 occurrences
+   Status: ➖ NEUTRAL (no clear pattern)
+
+💡 EVENT-BASED INSIGHTS:
+1. Earnings season shows positive bias (54.78% win rate)
+2. Options expiry week has negative edge - avoid or hedge (48.45% win rate)
+3. FOMC weeks are neutral - pattern not strong enough to trade
+4. Options expiry volatility is 1.02% - lower than normal, but win rate poor
+5. Consider reducing positions during options expiry week (week of 3rd Friday)
+
+📅 UPCOMING EVENTS (Based on Calendar):
+- Next FOMC Meeting: March 19-20, 2025
+- Next Options Expiry: 3rd Friday of current month
+- Earnings Season: January, April, July, October
+
+🔧 EVENT CALENDAR CONFIGURATION:
+Event patterns use .claude/seasonal-events.json for custom events.
+Default events include: FOMC meetings (2024-2026), monthly options expiry, earnings seasons.
+
+⚠️ REMEMBER: Event-based patterns capture market behavior around known calendar events.
+Combine with news flow and volatility expectations for best results.
+```
+
 ## Usage Tips
 
 **For Long-Term Investors:**
@@ -243,10 +302,19 @@ Use with technical analysis and proper position sizing.
 - Best edge typically in Lunch-Hour and Afternoon sessions
 - Use hour-of-day patterns to time entries within your trading day
 
+**For Event-Aware Trading:**
+- Monitor FOMC meeting dates (8 times per year) - high-impact events
+- Be cautious during options expiry week (3rd Friday) - historical negative bias
+- Earnings seasons (Jan, Apr, Jul, Oct) show modest positive bias
+- Reduce position size or hedge during weak event periods
+- Combine event patterns with volatility expectations (VIX, implied vol)
+- Custom events can be added to .claude/seasonal-events.json
+
 **For Risk Management:**
 - Hedge during historically weak periods
 - Increase cash allocation in weak quarters
 - Use options strategies to protect downside
 - Tighter stops during high-volatility sessions (Pre-Market)
+- Reduce exposure during negative-bias events (e.g., Options-Expiry-Week)
 
 Remember: Seasonal analysis provides a statistical edge, not a crystal ball!

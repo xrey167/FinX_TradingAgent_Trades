@@ -18,6 +18,9 @@ import { globalToolCache } from '../lib/tool-cache.ts';
 import { formatToolResult, formatToolError, requireEnvVar, createCacheKey } from './helpers.ts';
 import { getDataFetcher, HourOfDayExtractor, MarketSessionExtractor } from './seasonal-patterns/index.ts';
 import type { CandleData, SeasonalTimeframe } from './seasonal-patterns/index.ts';
+import { EventCalendar } from './seasonal-patterns/event-calendar.ts';
+import { FOMCWeekExtractor, OptionsExpiryWeekExtractor, EarningsSeasonExtractor } from './seasonal-patterns/event-extractors.ts';
+import * as path from 'path';
 
 const inputSchema = z.object({
   symbol: z.string().describe('Stock ticker symbol (e.g., AAPL.US, SPY.US)'),
@@ -70,6 +73,15 @@ interface MarketSessionStats {
   sampleSize: number;
 }
 
+interface EventBasedStats {
+  event: string;
+  avgReturn: number;
+  winRate: number;
+  volatility: number;
+  sampleSize: number;
+  impact: 'high' | 'medium' | 'low';
+}
+
 interface SeasonalPattern {
   name: string;
   period: string;
@@ -97,8 +109,8 @@ Cached for 24-48 hours depending on timeframe.`,
     try {
       requireEnvVar('EODHD_API_KEY');
       const { symbol, years, timeframe = 'daily', patterns } = input;
-      // Schema version v3: Fixed NaN/Infinity handling in hourly patterns
-      const cacheKey = createCacheKey('analyze_seasonal_v3', { symbol, years, timeframe });
+      // Schema version v4: Added event-based patterns (FOMC, options expiry, earnings)
+      const cacheKey = createCacheKey('analyze_seasonal_v4', { symbol, years, timeframe });
 
       // Cache TTL: 48 hours for hourly (user decision), 24 hours for daily
       const cacheTTL = timeframe === 'hourly' ? 48 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
@@ -343,6 +355,72 @@ Cached for 24-48 hours depending on timeframe.`,
             });
           }
 
+          // Analyze event-based patterns (FOMC weeks, options expiry, earnings seasons)
+          let eventBasedStats: EventBasedStats[] | undefined;
+          if (timeframe === 'daily') {
+            try {
+              // Try to load event calendar config (optional)
+              const eventConfigPath = path.join(process.cwd(), '.claude', 'seasonal-events.json');
+              const calendar = EventCalendar.fromFile(eventConfigPath);
+
+              // Extract event periods
+              const fomcExtractor = new FOMCWeekExtractor(calendar);
+              const optionsExtractor = new OptionsExpiryWeekExtractor(calendar);
+              const earningsExtractor = new EarningsSeasonExtractor(calendar);
+
+              const eventData: Record<string, number[]> = {};
+
+              for (const point of priceData) {
+                const fomcWeek = fomcExtractor.extract(point.date.getTime());
+                if (fomcWeek) {
+                  if (!eventData[fomcWeek]) eventData[fomcWeek] = [];
+                  eventData[fomcWeek]?.push(point.return);
+                }
+
+                const optionsWeek = optionsExtractor.extract(point.date.getTime());
+                if (optionsWeek) {
+                  if (!eventData[optionsWeek]) eventData[optionsWeek] = [];
+                  eventData[optionsWeek]?.push(point.return);
+                }
+
+                const earningsSeason = earningsExtractor.extract(point.date.getTime());
+                if (earningsSeason) {
+                  if (!eventData[earningsSeason]) eventData[earningsSeason] = [];
+                  eventData[earningsSeason]?.push(point.return);
+                }
+              }
+
+              eventBasedStats = Object.entries(eventData).map(([event, returns]) => {
+                const filtered = returns.filter(r => !isNaN(r) && isFinite(r));
+                const positive = filtered.filter(r => r > 0).length;
+                const sum = filtered.reduce((a, b) => a + b, 0);
+                const mean = filtered.length > 0 ? sum / filtered.length : 0;
+                const variance = filtered.length > 0
+                  ? filtered.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / filtered.length
+                  : 0;
+                const volatility = Math.sqrt(variance);
+
+                // Determine impact level
+                let impact: 'high' | 'medium' | 'low' = 'medium';
+                if (event.includes('FOMC')) impact = 'high';
+                else if (event.includes('Options')) impact = 'medium';
+                else if (event.includes('Earnings')) impact = 'medium';
+
+                return {
+                  event,
+                  avgReturn: isFinite(mean) ? mean : 0,
+                  winRate: filtered.length > 0 ? (positive / filtered.length) * 100 : 0,
+                  volatility: isFinite(volatility) ? volatility : 0,
+                  sampleSize: filtered.length,
+                  impact,
+                };
+              });
+            } catch (error) {
+              // Event calendar not configured - skip event analysis
+              eventBasedStats = undefined;
+            }
+          }
+
           // Identify famous seasonal patterns
           const patterns: SeasonalPattern[] = [];
 
@@ -427,6 +505,11 @@ Cached for 24-48 hours depending on timeframe.`,
             ? [...marketSessionStats].sort((a, b) => b.avgReturn - a.avgReturn)[0]
             : undefined;
 
+          // Find best/worst events
+          const bestEvent = eventBasedStats && eventBasedStats.length > 0
+            ? [...eventBasedStats].sort((a, b) => b.avgReturn - a.avgReturn)[0]
+            : undefined;
+
           return {
             symbol,
             period: `${years} years`,
@@ -438,6 +521,7 @@ Cached for 24-48 hours depending on timeframe.`,
             dayOfWeekStats,
             ...(hourOfDayStats && { hourOfDayStats }),
             ...(marketSessionStats && { marketSessionStats }),
+            ...(eventBasedStats && { eventBasedStats }),
             patterns,
 
             summary: {
@@ -477,9 +561,18 @@ Cached for 24-48 hours depending on timeframe.`,
                   volatility: bestSession.volatility,
                 },
               }),
+              ...(bestEvent && {
+                bestEvent: {
+                  event: bestEvent.event,
+                  avgReturn: bestEvent.avgReturn,
+                  winRate: bestEvent.winRate,
+                  volatility: bestEvent.volatility,
+                  impact: bestEvent.impact,
+                },
+              }),
             },
 
-            insights: generateInsights(monthlyStats, quarterlyStats, dayOfWeekStats, patterns, hourOfDayStats, marketSessionStats),
+            insights: generateInsights(monthlyStats, quarterlyStats, dayOfWeekStats, patterns, hourOfDayStats, marketSessionStats, eventBasedStats),
           };
         }
       );
@@ -504,9 +597,34 @@ function generateInsights(
   dayOfWeekStats: DayOfWeekStats[],
   patterns: SeasonalPattern[],
   hourOfDayStats?: HourOfDayStats[],
-  marketSessionStats?: MarketSessionStats[]
+  marketSessionStats?: MarketSessionStats[],
+  eventBasedStats?: EventBasedStats[]
 ): string[] {
   const insights: string[] = [];
+
+  // Event-based insights (highest priority for trading around events)
+  if (eventBasedStats && eventBasedStats.length > 0) {
+    const positiveEvents = eventBasedStats.filter(e => e.avgReturn > 0 && e.winRate > 55);
+    const negativeEvents = eventBasedStats.filter(e => e.avgReturn < 0 || e.winRate < 45);
+
+    if (positiveEvents.length > 0) {
+      const topEvent = positiveEvents[0];
+      if (topEvent) {
+        insights.push(
+          `Positive event pattern: ${topEvent.event} (${topEvent.winRate.toFixed(1)}% win rate, ${topEvent.avgReturn.toFixed(3)}% avg)`
+        );
+      }
+    }
+
+    if (negativeEvents.length > 0) {
+      const worstEvent = negativeEvents[0];
+      if (worstEvent) {
+        insights.push(
+          `Avoid or hedge during: ${worstEvent.event} (${worstEvent.winRate.toFixed(1)}% win rate, ${worstEvent.avgReturn.toFixed(3)}% avg)`
+        );
+      }
+    }
+  }
 
   // Hourly insights (highest priority for hourly analysis)
   if (hourOfDayStats && hourOfDayStats.length > 0) {
