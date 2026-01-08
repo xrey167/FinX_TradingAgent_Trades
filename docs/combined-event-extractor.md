@@ -17,16 +17,16 @@ The Combined Event Extractor detects when multiple high-impact market events occ
 ### Extreme Impact (3.0x+ volatility)
 - `Multiple-HighImpact-Week` - 3+ high-impact events (3.5x multiplier)
 - `Election+FOMC-Week` - Political uncertainty + monetary policy (3.1x multiplier)
-- `FOMC+NFP-Week` - Rate decision + employment data (2.9x multiplier)
 
 ### Very High Impact (2.5-3.0x volatility)
+- `FOMC+NFP-Week` - Rate decision + employment data (2.9x multiplier)
 - `FOMC+TripleWitching-Week` - Policy + massive derivative expiry (2.8x)
 - `TripleWitching+Earnings-Week` - Quarterly expiry + earnings (2.7x)
 - `Election+CPI-Week` - Political uncertainty + inflation (2.7x)
 - `FOMC+CPI-Week` - Policy + inflation expectations (2.6x)
 - `CPI+NFP-Week` - Comprehensive economic data dump (2.5x)
 
-### High Impact (2.0-2.5x volatility)
+### High Impact (1.9x-2.5x volatility)
 - `FOMC+GDP-Week` - Policy + growth indicators (2.4x)
 - `FOMC+Earnings-Week` - Policy + corporate fundamentals (2.3x)
 - `GDP+CPI-Week` - Growth + inflation metrics (2.2x)

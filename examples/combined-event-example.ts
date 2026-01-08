@@ -3,7 +3,12 @@
  * Demonstrates how to detect and analyze event combinations
  */
 
-import { EventCalendar, CombinedEventExtractor } from '../src/tools/seasonal-patterns/index.ts';
+import {
+  EventCalendar,
+  CombinedEventExtractor,
+  type EventCombination,
+  type EventCombinationType
+} from '../src/tools/seasonal-patterns/index.ts';
 
 console.log('='.repeat(70));
 console.log('COMBINED EVENT EXTRACTOR - USAGE EXAMPLES');
@@ -49,7 +54,7 @@ console.log('\nExample 2: Scan Next 90 Days for High-Risk Weeks');
 console.log('-'.repeat(70));
 
 const daysToScan = 90;
-const highRiskWeeks = new Map<string, any>();
+const highRiskWeeks = new Map<string, EventCombination>();
 
 for (let i = 0; i < daysToScan; i++) {
   const scanDate = new Date(today);
@@ -73,7 +78,7 @@ for (const [weekRange, combo] of highRiskWeeks) {
   console.log(`${weekNum}. Week of ${weekRange}`);
   console.log(`   Combination: ${combo.type}`);
   console.log(`   Impact: ${combo.expectedImpact.toUpperCase()} (${combo.volatilityMultiplier}x volatility)`);
-  console.log(`   Events: ${combo.events.map((e: any) => e.name).join(', ')}`);
+  console.log(`   Events: ${combo.events.map(e => e.name).join(', ')}`);
   console.log();
   weekNum++;
 }
@@ -157,7 +162,7 @@ const allCombinations = extractor.getAllCombinations();
 console.log(`\nTotal combination types: ${allCombinations.length}\n`);
 
 // Group by impact level
-const byImpact: Record<string, any[]> = {
+const byImpact: Record<string, { type: EventCombinationType; multiplier: number }[]> = {
   extreme: [],
   'very-high': [],
   high: [],

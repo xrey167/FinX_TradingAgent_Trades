@@ -52,6 +52,62 @@ export class EventCalendar {
   private weekCache: Map<string, { weekStart: Date; weekEnd: Date }> = new Map();
 
   /**
+   * US Market Holidays (NYSE/NASDAQ closures)
+   * 2024-2035 calendar
+   * Source: NYSE Holiday Schedule
+   */
+  private static US_MARKET_HOLIDAYS = [
+    // 2024
+    '2024-01-01', '2024-01-15', '2024-02-19', '2024-03-29',
+    '2024-05-27', '2024-06-19', '2024-07-04', '2024-09-02',
+    '2024-11-28', '2024-12-25',
+    // 2025
+    '2025-01-01', '2025-01-20', '2025-02-17', '2025-04-18',
+    '2025-05-26', '2025-06-19', '2025-07-04', '2025-09-01',
+    '2025-11-27', '2025-12-25',
+    // 2026
+    '2026-01-01', '2026-01-19', '2026-02-16', '2026-04-03',
+    '2026-05-25', '2026-06-19', '2026-07-03', '2026-09-07',
+    '2026-11-26', '2026-12-25',
+    // 2027
+    '2027-01-01', '2027-01-18', '2027-02-15', '2027-03-26',
+    '2027-05-31', '2027-06-18', '2027-07-05', '2027-09-06',
+    '2027-11-25', '2027-12-24',
+    // 2028
+    '2028-01-17', '2028-02-21', '2028-04-14', '2028-05-29',
+    '2028-06-19', '2028-07-04', '2028-09-04', '2028-11-23',
+    '2028-12-25',
+    // 2029
+    '2029-01-01', '2029-01-15', '2029-02-19', '2029-03-30',
+    '2029-05-28', '2029-06-19', '2029-07-04', '2029-09-03',
+    '2029-11-22', '2029-12-25',
+    // 2030
+    '2030-01-01', '2030-01-21', '2030-02-18', '2030-04-19',
+    '2030-05-27', '2030-06-19', '2030-07-04', '2030-09-02',
+    '2030-11-28', '2030-12-25',
+    // 2031
+    '2031-01-01', '2031-01-20', '2031-02-17', '2031-04-11',
+    '2031-05-26', '2031-06-19', '2031-07-04', '2031-09-01',
+    '2031-11-27', '2031-12-25',
+    // 2032
+    '2032-01-01', '2032-01-19', '2032-02-16', '2032-03-26',
+    '2032-05-31', '2032-06-18', '2032-07-05', '2032-09-06',
+    '2032-11-25', '2032-12-24',
+    // 2033
+    '2033-01-17', '2033-02-21', '2033-04-15', '2033-05-30',
+    '2033-06-20', '2033-07-04', '2033-09-05', '2033-11-24',
+    '2033-12-26',
+    // 2034
+    '2034-01-02', '2034-01-16', '2034-02-20', '2034-04-07',
+    '2034-05-29', '2034-06-19', '2034-07-04', '2034-09-04',
+    '2034-11-23', '2034-12-25',
+    // 2035
+    '2035-01-01', '2035-01-15', '2035-02-19', '2035-03-23',
+    '2035-05-28', '2035-06-19', '2035-07-04', '2035-09-03',
+    '2035-11-22', '2035-12-25',
+  ];
+
+  /**
    * Default FOMC meeting dates (2024-2026)
    * Source: federalreserve.gov
    */
@@ -754,6 +810,29 @@ export class EventCalendar {
   }
 
   /**
+   * Get events by type within a date range
+   * Uses existing eventsByType index for O(1) lookup
+   *
+   * @param eventType - Type of events to retrieve
+   * @param startDate - Start of date range (inclusive)
+   * @param endDate - End of date range (inclusive)
+   * @returns Array of events of specified type within date range
+   */
+  public getEventsByType(
+    eventType: CalendarEvent['type'],
+    startDate: Date,
+    endDate: Date
+  ): CalendarEvent[] {
+    // Get all events of this type from index (O(1) lookup)
+    const eventsOfType = this.eventsByType.get(eventType) || [];
+
+    // Filter by date range (O(M) where M = number of events of this type)
+    return eventsOfType.filter(event =>
+      event.date >= startDate && event.date <= endDate
+    );
+  }
+
+  /**
    * Check if date is within T-1 of a dividend ex-date (cum-dividend pattern)
    * Per-symbol basis
    */
@@ -862,6 +941,17 @@ export class EventCalendar {
 
     // Fallback (should not reach here)
     return new Date(year, month, 1);
+  }
+
+  /**
+   * Check if a date is a US market holiday (NYSE/NASDAQ closure)
+   *
+   * @param date - Date to check
+   * @returns true if date is a market holiday, false otherwise
+   */
+  isMarketHoliday(date: Date): boolean {
+    const dateStr = date.toISOString().split('T')[0];
+    return EventCalendar.US_MARKET_HOLIDAYS.includes(dateStr!);
   }
 
   /**

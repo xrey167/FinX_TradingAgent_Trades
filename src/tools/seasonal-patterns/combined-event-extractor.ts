@@ -194,6 +194,7 @@ export class CombinedEventExtractor implements PeriodExtractor {
     const weekEnd = this.getWeekEnd(date);
 
     const events: CalendarEvent[] = [];
+    const uniqueEventKeys = new Set<string>();
 
     // Iterate through each day of the week
     const currentDate = new Date(weekStart);
@@ -206,11 +207,11 @@ export class CombinedEventExtractor implements PeriodExtractor {
       );
 
       // Deduplicate events (same event might be returned multiple times)
+      // O(N) - efficient using Set-based deduplication
       for (const event of significantEvents) {
-        if (!events.some(existing =>
-          existing.name === event.name &&
-          existing.date.getTime() === event.date.getTime()
-        )) {
+        const key = `${event.name}|${event.date.getTime()}`;
+        if (!uniqueEventKeys.has(key)) {
+          uniqueEventKeys.add(key);
           events.push(event);
         }
       }
