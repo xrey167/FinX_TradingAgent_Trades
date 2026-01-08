@@ -1,0 +1,29 @@
+{
+  "name": "finx_tradingagent_trades",
+  "version": "1.0.0",
+  "description": "Market regime analysis agent using Claude Agent SDK",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "cli": "bun run src/cli.ts",
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch run src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "research": "bun run cli-research-with-claude.ts",
+    "research:node": "tsx cli-research-with-claude.ts",
+    "research:simple": "bun run cli-research-simple.ts",
+    "research:ai": "bun run test-research-system.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.76",
+    "axios": "^1.13.2",
+    "commander": "^14.0.2",
+    "date-fns": "^4.1.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.2"
+  }
+}
