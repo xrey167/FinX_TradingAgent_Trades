@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Seasonal Events Configuration",
+  "description": "Schema for user-defined custom events in seasonal pattern analysis",
+  "type": "object",
+  "required": ["custom_events"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\d+\.\d+\.\d+$",
+      "description": "Configuration version (semantic versioning)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of this configuration file"
+    },
+    "custom_events": {
+      "type": "array",
+      "description": "Array of user-defined custom events",
+      "items": {
+        "type": "object",
+        "required": ["date", "name", "type", "impact"],
+        "properties": {
+          "date": {
+            "type": "string",
+            "pattern": "^\d{4}-\d{2}-\d{2}$",
+            "description": "Event date in ISO format (YYYY-MM-DD)"
+          },
+          "dateRange": {
+            "type": "object",
+            "description": "Optional date range for multi-day events",
+            "required": ["start", "end"],
+            "properties": {
+              "start": {
+                "type": "string",
+                "pattern": "^\d{4}-\d{2}-\d{2}$",
+                "description": "Start date (YYYY-MM-DD)"
+              },
+              "end": {
+                "type": "string",
+                "pattern": "^\d{4}-\d{2}-\d{2}$",
+                "description": "End date (YYYY-MM-DD)"
+              }
+            }
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Event name"
+          },
+          "type": {
+            "type": "string",
+            "description": "Event type/category"
+          },
+          "ticker": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]+\.[A-Z]{2}$",
+            "description": "Optional ticker symbol (e.g., AAPL.US, NVDA.US)"
+          },
+          "impact": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "Expected market impact level"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Optional event description"
+          }
+        }
+      }
+    },
+    "event_types": {
+      "type": "object",
+      "description": "Event type definitions and defaults",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "default_impact": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          }
+        }
+      }
+    }
+  }
+}

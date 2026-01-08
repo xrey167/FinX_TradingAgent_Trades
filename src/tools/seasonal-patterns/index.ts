@@ -80,3 +80,15 @@ export {
   ISMExtractor,
   JoblessClaimsExtractor,
 } from './economic-indicator-extractors.ts';
+
+// Export combined event extractor (Issue #17)
+// TODO: Implement CombinedEventExtractor - currently combined-event-extractor.ts is a duplicate of event-extractors.ts
+// export {
+//   CombinedEventExtractor,
+// } from './combined-event-extractor.ts';
+//
+// export type {
+//   EventCombinationType,
+//   EventCombination,
+//   CombinationStats,
+// } from './combined-event-extractor.ts';

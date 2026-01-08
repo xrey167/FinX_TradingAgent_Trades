@@ -3,6 +3,8 @@
  * Tracks market-moving events: FOMC meetings, options expiry, earnings seasons
  */
 
+import type { MarketSector } from './sector-definitions.ts';
+
 export interface CalendarEvent {
   date: Date;
   name: string;
@@ -10,6 +12,7 @@ export interface CalendarEvent {
   impact: 'high' | 'medium' | 'low';
   description?: string;
   ticker?: string; // For ticker-specific events (e.g., earnings, dividends)
+  sectors?: MarketSector[]; // Affected market sectors (Issue #18)
 }
 
 export interface EventCalendarConfig {

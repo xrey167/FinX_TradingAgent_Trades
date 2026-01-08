@@ -34,6 +34,7 @@ import {
   GDPExtractor,
   ElectionExtractor,
 } from './seasonal-patterns/event-extractors.ts';
+import { generateWASDReport, formatWASDReport } from './seasonal-patterns/wasd-report.ts';
 import { CPIExtractor, NFPExtractor } from './seasonal-patterns/cpi-nfp-extractors.ts';
 import {
   FedRateDecisionExtractor,
@@ -60,6 +61,7 @@ const inputSchema = z.object({
     .optional()
     .default(true)
     .describe('Include economic event analysis (CPI, NFP, FOMC, Fed Rate, ECB, BoE, BoJ, GDP, Triple Witching, Elections, etc.). Default: true.'),
+  reportMode: z.enum(['default', 'wasd']).optional().default('default').describe('Report format: default (detailed) or wasd (unified cross-timeframe report)'),
 });
 
 interface MonthlyStats {
@@ -155,7 +157,7 @@ Cached for 24-48 hours depending on timeframe.`,
   async (input) => {
     try {
       requireEnvVar('EODHD_API_KEY');
-      const { symbol, years, timeframe = 'daily', patterns, includeEvents = true } = input;
+      const { symbol, years, timeframe = 'daily', patterns, includeEvents = true, reportMode = 'default' } = input;
       // Schema version v6: Added Phase 5 economic events (CPI, NFP, Fed, ECB, BoE, BoJ, GDP, Triple Witching, Elections)
       const cacheKey = createCacheKey('analyze_seasonal_v6', { symbol, years, timeframe, includeEvents });
 
@@ -776,6 +778,23 @@ Cached for 24-48 hours depending on timeframe.`,
       // Calculate API cost based on timeframe
       const dataFetcher = getDataFetcher(timeframe as SeasonalTimeframe);
       const apiCost = dataFetcher.getCostEstimate();
+
+      // WASD Report Mode - Unified cross-timeframe report
+      if (input.reportMode === 'wasd') {
+        const wasdReport = generateWASDReport(analysis);
+        const formattedReport = formatWASDReport(wasdReport);
+        return formatToolResult(
+          {
+            ...wasdReport,
+            formattedReport,
+          },
+          {
+            sourceUrl: `https://eodhd.com/api/eod/${symbol}`,
+            timestamp: new Date().toISOString(),
+            apiCost,
+          }
+        );
+      }
 
       return formatToolResult(analysis, {
         sourceUrl: `https://eodhd.com/api/eod/${symbol}`,
