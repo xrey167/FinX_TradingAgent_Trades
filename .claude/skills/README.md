@@ -132,11 +132,72 @@ Run comprehensive autonomous investment research using the full research orchest
 
 ---
 
+### 6. `/analyze-seasonal <symbol> [years]`
+Analyze seasonal patterns and calendar effects in historical price data.
+
+**Usage:**
+```bash
+/analyze-seasonal AAPL.US
+/analyze-seasonal SPY.US 10
+/analyze-seasonal TSLA.US 3
+```
+
+**What you get:**
+- **Monthly Performance:**
+  - Best/worst performing months
+  - Consistency scores (% of years positive)
+  - Historical year-over-year patterns
+- **Quarterly Trends:**
+  - Q1, Q2, Q3, Q4 average returns
+  - Win rates and volatility
+- **Day-of-Week Effects:**
+  - Monday blues, Friday rallies
+  - Win rates for each day
+- **Famous Patterns:**
+  - Santa Rally (late December)
+  - Sell in May (May-October weakness)
+  - January Effect
+  - Win rates and confirmation status
+- **Actionable Insights:**
+  - Entry/exit timing based on seasonal strength
+  - Weak periods to avoid or hedge
+  - Trading implications
+
+**API Cost:** 1 EODHD API call (EOD data)
+
+**Caching:** 24 hours (seasonal patterns don't change frequently)
+
+**Example Output:**
+```
+📊 SEASONAL ANALYSIS: AAPL.US (5 Years)
+
+🟢 BEST MONTHS:
+1. November: +0.12% avg daily, 80% consistent
+2. December: +0.10% avg daily, 75% consistent
+
+🔴 WORST MONTHS:
+1. September: -0.05% avg daily, 30% consistent
+
+📈 STRONGEST QUARTER: Q4 (+0.15% avg daily, 68% win rate)
+📆 BEST DAY: Friday (+0.08% avg, 56% win rate)
+
+🎅 CONFIRMED PATTERNS:
+✅ Santa Rally: +0.15%, 72% win rate
+✅ Sell in May: -0.03%, 45% win rate
+
+💡 KEY INSIGHTS:
+- Q4 (Oct-Dec) shows strong seasonal strength
+- September historically weakest month
+- Consider reducing exposure May-September
+```
+
+---
+
 ## Prerequisites
 
 ### Environment Variables
 
-**For data fetching skills (1-4):**
+**For data fetching skills (1-4, 6):**
 ```bash
 export EODHD_API_KEY=your_key_here
 ```
@@ -155,7 +216,7 @@ export ANTHROPIC_API_KEY=your_claude_api_key
 ### Dependencies
 
 All skills use the FinX Trading Agent's infrastructure:
-- MCP tools (fetch_financial_data, fetch_sentiment_data, fetch_market_data, analyze_regime)
+- MCP tools (fetch_financial_data, fetch_sentiment_data, fetch_market_data, analyze_regime, analyze_seasonal)
 - EODHD client with caching and retry logic
 - Research orchestrator system (for /research skill)
 
@@ -168,6 +229,7 @@ All skills benefit from the 2-tier caching system:
 - **Financial data:** 30 minute TTL (fundamentals change slowly)
 - **Sentiment data:** 10 minute TTL (news updates more frequently)
 - **Market data:** 5 minute TTL (prices change frequently)
+- **Seasonal data:** 24 hour TTL (patterns change very slowly)
 
 Subsequent calls for the same data within the TTL will be instant (no API calls).
 
