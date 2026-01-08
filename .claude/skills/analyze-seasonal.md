@@ -1,5 +1,5 @@
 ---
-description: Analyze seasonal patterns and calendar effects in historical price data
+description: Analyze seasonal patterns and calendar effects across multiple timeframes
 arguments:
   - name: symbol
     required: true
@@ -8,37 +8,54 @@ arguments:
     required: false
     default: "5"
     description: Number of years of history to analyze
+  - name: timeframe
+    required: false
+    default: "daily"
+    description: Analysis timeframe (daily or hourly)
 examples:
   - /analyze-seasonal AAPL.US
   - /analyze-seasonal SPY.US 10
-  - /analyze-seasonal TSLA.US 3
+  - /analyze-seasonal SPY.US 2 hourly
+  - /analyze-seasonal QQQ.US 1 hourly
 ---
 
 # Analyze Seasonal Patterns
 
-Analyzes historical price data for {{symbol}} to identify seasonal patterns and calendar effects over the past {{years}} years.
+Analyzes historical price data for {{symbol}} to identify seasonal patterns and calendar effects across multiple timeframes.
 
-**What you'll discover:**
+**Daily Analysis** (default):
 - Best/worst performing months (e.g., "November rally", "September selloff")
 - Quarterly trends (Q4 strength, Q1 weakness, etc.)
 - Day-of-week effects (Monday blues, Friday rallies)
 - Famous patterns verification (Santa Rally, Sell in May, January Effect)
-- Multi-year consistency scores
+- API Cost: 1 EODHD API call | History: 5+ years | Cache: 24 hours
 
-**API Cost:** 1 EODHD API call
-
-**Caching:** Results cached for 24 hours (seasonal patterns don't change frequently)
+**Hourly Analysis** (for day traders):
+- Hour-of-day patterns - Identifies best/worst trading hours (0-23 UTC)
+- Market session analysis - Pre-Market, Market-Open, Mid-Day, Lunch-Hour, Afternoon, Power-Hour
+- Intraday volatility patterns - Which sessions have highest volatility/risk
+- Win rates and sample sizes for each hour and session
+- API Cost: 5 EODHD API calls | History: 1-2 years | Cache: 48 hours
 
 ---
 
 Use the `analyze_seasonal` MCP tool to perform the analysis, then format the results in a clear, actionable format.
 
 ```typescript
-// Example tool call
-const result = await analyzeSeasonalTool({
+// Daily analysis (default)
+const dailyResult = await analyzeSeasonalTool({
   symbol: "{{symbol}}",
-  years: {{years}}
+  years: {{years}},
+  timeframe: "daily"
 });
+
+// Hourly analysis (for day traders)
+const hourlyResult = await analyzeSeasonalTool({
+  symbol: "{{symbol}}",
+  years: 2, // Limited to 1-2 years for hourly
+  timeframe: "hourly"
+});
+
 const data = JSON.parse(result.content[0].text);
 ```
 
@@ -173,6 +190,40 @@ Data Points: 1,260 trading days
 Always combine with fundamental and technical analysis.
 ```
 
+### Hourly Analysis Example
+
+```
+📊 HOURLY SEASONAL ANALYSIS: AAPL.US (1 Year)
+============================================================
+Timeframe: hourly (1h candles)
+Data Points: 1,951 hourly bars
+
+⏰ HOUR-OF-DAY PATTERNS (Top 5 Hours by Avg Return):
+1. Hour-11 (6:00am EST): +0.125% avg, 52.4% win rate (145 samples)
+2. Hour-17 (12:00pm EST): +0.036% avg, 52.7% win rate (245 samples)
+3. Hour-19 (2:00pm EST): +0.020% avg, 51.0% win rate (102 samples)
+4. Hour-16 (11:00am EST): +0.011% avg, 49.8% win rate (245 samples)
+5. Hour-15 (10:00am EST): +0.008% avg, 48.4% win rate (246 samples)
+
+📊 MARKET SESSION PATTERNS:
+✅ Lunch-Hour (12:00-1:00pm EST): +0.036% avg, 52.7% win rate, 0.375% vol
+⚠️ Power-Hour (3:00-4:00pm EST): -0.003% avg, 42.2% win rate, 0.026% vol
+   Pre-Market: +0.006% avg, 48.8% win rate, 1.057% vol (HIGH VOLATILITY)
+   Market-Open: -0.011% avg, 48.0% win rate, 0.546% vol
+   Mid-Day: +0.011% avg, 49.8% win rate, 0.444% vol
+   Afternoon: +0.007% avg, 51.1% win rate, 0.272% vol
+
+💡 INTRADAY INSIGHTS:
+- Best trading window: Lunch-Hour shows strongest edge (52.7% win rate)
+- Avoid: Power-Hour has poor win rate (42.2%)
+- High volatility: Pre-Market session (1.057% vol) - increased risk/reward
+- Weak hours to avoid: Hour-20 (historically negative)
+- Market-Open shows weakness (-0.011% avg) - wait for first hour to pass
+
+⚠️ REMEMBER: Intraday patterns require tighter risk management.
+Use with technical analysis and proper position sizing.
+```
+
 ## Usage Tips
 
 **For Long-Term Investors:**
@@ -185,9 +236,17 @@ Always combine with fundamental and technical analysis.
 - Higher win probability during strong seasonal periods
 - Reduce position size during weak seasonal months
 
+**For Day Traders (Hourly Analysis):**
+- Focus on high win-rate hours (>55% win rate) for entries
+- Avoid historically weak hours and sessions (<45% win rate)
+- Be aware of high-volatility sessions (Pre-Market, Market-Open) - wider stops needed
+- Best edge typically in Lunch-Hour and Afternoon sessions
+- Use hour-of-day patterns to time entries within your trading day
+
 **For Risk Management:**
 - Hedge during historically weak periods
 - Increase cash allocation in weak quarters
 - Use options strategies to protect downside
+- Tighter stops during high-volatility sessions (Pre-Market)
 
 Remember: Seasonal analysis provides a statistical edge, not a crystal ball!

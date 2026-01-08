@@ -16,10 +16,21 @@ import { z } from 'zod';
 import { getEODHDClient } from '../lib/eodhd-client-singleton.ts';
 import { globalToolCache } from '../lib/tool-cache.ts';
 import { formatToolResult, formatToolError, requireEnvVar, createCacheKey } from './helpers.ts';
+import { getDataFetcher, HourOfDayExtractor, MarketSessionExtractor } from './seasonal-patterns/index.ts';
+import type { CandleData, SeasonalTimeframe } from './seasonal-patterns/index.ts';
 
 const inputSchema = z.object({
   symbol: z.string().describe('Stock ticker symbol (e.g., AAPL.US, SPY.US)'),
   years: z.number().optional().default(5).describe('Number of years of history to analyze (default: 5)'),
+  timeframe: z
+    .enum(['daily', 'hourly'])
+    .optional()
+    .default('daily')
+    .describe('Timeframe for analysis: daily (1 API call) or hourly (5 API calls, limited to 1-2 years)'),
+  patterns: z
+    .array(z.string())
+    .optional()
+    .describe('Specific patterns to analyze (e.g., ["month-of-year", "hour-of-day"]). If not specified, uses default patterns for timeframe.'),
 });
 
 interface MonthlyStats {
@@ -44,6 +55,21 @@ interface DayOfWeekStats {
   winRate: number;
 }
 
+interface HourOfDayStats {
+  hour: string;
+  avgReturn: number;
+  winRate: number;
+  sampleSize: number;
+}
+
+interface MarketSessionStats {
+  session: string;
+  avgReturn: number;
+  winRate: number;
+  volatility: number;
+  sampleSize: number;
+}
+
 interface SeasonalPattern {
   name: string;
   period: string;
@@ -54,40 +80,51 @@ interface SeasonalPattern {
 
 export const analyzeSeasonalTool = tool(
   'analyze_seasonal',
-  `Analyze seasonal patterns and calendar effects in historical price data.
+  `Analyze seasonal patterns and calendar effects in historical price data across multiple timeframes.
 
 Identifies:
-- Best/worst performing months (e.g., "November rally")
-- Quarterly trends (Q4 strength, Q1 weakness, etc.)
-- Day-of-week effects (Monday selloffs, Friday rallies)
-- Famous patterns (Santa Rally, Sell in May, January Effect)
-- Multi-year consistency of seasonal trends
+- **Daily patterns** (default): Monthly, quarterly, day-of-week, famous patterns (Santa Rally, Sell in May)
+- **Hourly patterns**: Hour-of-day, market sessions (Pre-Market, Open, Lunch, Power Hour, After Hours)
+- Multi-year consistency and statistical significance
 
-Uses historical data to quantify seasonal edge. Costs 1 API call per request.`,
+API Costs:
+- Daily analysis: 1 API call (5+ years history)
+- Hourly analysis: 5 API calls (1-2 years history limit)
+
+Cached for 24-48 hours depending on timeframe.`,
   inputSchema.shape,
   async (input) => {
     try {
       requireEnvVar('EODHD_API_KEY');
-      const { symbol, years } = input;
-      const cacheKey = createCacheKey('analyze_seasonal', { symbol, years });
+      const { symbol, years, timeframe = 'daily', patterns } = input;
+      // Schema version v3: Fixed NaN/Infinity handling in hourly patterns
+      const cacheKey = createCacheKey('analyze_seasonal_v3', { symbol, years, timeframe });
 
-      // Try cache first (24 hour TTL - seasonal patterns don't change often)
+      // Cache TTL: 48 hours for hourly (user decision), 24 hours for daily
+      const cacheTTL = timeframe === 'hourly' ? 48 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+
+      // Try cache first
       const analysis = await globalToolCache.getOrFetch(
         cacheKey,
-        24 * 60 * 60 * 1000, // 24 hours
+        cacheTTL,
         async () => {
-          const client = getEODHDClient();
+          // Use new data fetcher for multi-timeframe support
+          const dataFetcher = getDataFetcher(timeframe as SeasonalTimeframe);
+          const candles: CandleData[] = await dataFetcher.fetch(symbol, years);
 
-          // Calculate date range
-          const endDate = new Date();
-          const startDate = new Date();
-          startDate.setFullYear(startDate.getFullYear() - years);
+          if (candles.length === 0) {
+            throw new Error('No historical data available for seasonal analysis');
+          }
 
-          const from = startDate.toISOString().split('T')[0];
-          const to = endDate.toISOString().split('T')[0];
-
-          // Fetch historical daily data
-          const data = await client.getEODData(symbol, from, to);
+          // Convert candles to legacy format for existing analysis code
+          const data = candles.map((c) => ({
+            date: c.date,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+            volume: c.volume,
+          }));
 
           if (data.length === 0) {
             throw new Error('No historical data available for seasonal analysis');
@@ -236,6 +273,76 @@ Uses historical data to quantify seasonal edge. Costs 1 API call per request.`,
             };
           });
 
+          // Analyze hour-of-day patterns (only for hourly timeframe)
+          let hourOfDayStats: HourOfDayStats[] | undefined;
+          if (timeframe === 'hourly') {
+            const hourExtractor = new HourOfDayExtractor();
+            const hourlyData: Record<string, number[]> = {};
+
+            for (const point of priceData) {
+              const hour = hourExtractor.extract(point.date.getTime());
+              if (hour) {
+                if (!hourlyData[hour]) hourlyData[hour] = [];
+                hourlyData[hour]?.push(point.return);
+              }
+            }
+
+            hourOfDayStats = Object.entries(hourlyData)
+              .map(([hour, returns]) => {
+                const filtered = returns.filter(r => !isNaN(r) && isFinite(r));
+                const positive = filtered.filter(r => r > 0).length;
+                const sum = filtered.reduce((a, b) => a + b, 0);
+                const avg = filtered.length > 0 ? sum / filtered.length : 0;
+
+                return {
+                  hour,
+                  avgReturn: isFinite(avg) ? avg : 0,
+                  winRate: filtered.length > 0 ? (positive / filtered.length) * 100 : 0,
+                  sampleSize: filtered.length,
+                };
+              })
+              .sort((a, b) => {
+                // Sort by hour number (extract from "Hour-XX" format)
+                const hourA = parseInt(a.hour.split('-')[1] || '0');
+                const hourB = parseInt(b.hour.split('-')[1] || '0');
+                return hourA - hourB;
+              });
+          }
+
+          // Analyze market session patterns (only for hourly timeframe)
+          let marketSessionStats: MarketSessionStats[] | undefined;
+          if (timeframe === 'hourly') {
+            const sessionExtractor = new MarketSessionExtractor();
+            const sessionData: Record<string, number[]> = {};
+
+            for (const point of priceData) {
+              const session = sessionExtractor.extract(point.date.getTime());
+              if (session) {
+                if (!sessionData[session]) sessionData[session] = [];
+                sessionData[session]?.push(point.return);
+              }
+            }
+
+            marketSessionStats = Object.entries(sessionData).map(([session, returns]) => {
+              const filtered = returns.filter(r => !isNaN(r) && isFinite(r));
+              const positive = filtered.filter(r => r > 0).length;
+              const sum = filtered.reduce((a, b) => a + b, 0);
+              const mean = filtered.length > 0 ? sum / filtered.length : 0;
+              const variance = filtered.length > 0
+                ? filtered.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / filtered.length
+                : 0;
+              const volatility = Math.sqrt(variance);
+
+              return {
+                session,
+                avgReturn: isFinite(mean) ? mean : 0,
+                winRate: filtered.length > 0 ? (positive / filtered.length) * 100 : 0,
+                volatility: isFinite(volatility) ? volatility : 0,
+                sampleSize: filtered.length,
+              };
+            });
+          }
+
           // Identify famous seasonal patterns
           const patterns: SeasonalPattern[] = [];
 
@@ -311,14 +418,26 @@ Uses historical data to quantify seasonal edge. Costs 1 API call per request.`,
           const sortedDays = [...dayOfWeekStats].sort((a, b) => b.avgReturn - a.avgReturn);
           const bestDay = sortedDays[0] || { day: 'N/A', avgReturn: 0, winRate: 0 };
 
+          // Find best hour and session (only for hourly timeframe)
+          const bestHour = hourOfDayStats && hourOfDayStats.length > 0
+            ? [...hourOfDayStats].sort((a, b) => b.avgReturn - a.avgReturn)[0]
+            : undefined;
+
+          const bestSession = marketSessionStats && marketSessionStats.length > 0
+            ? [...marketSessionStats].sort((a, b) => b.avgReturn - a.avgReturn)[0]
+            : undefined;
+
           return {
             symbol,
             period: `${years} years`,
             dataPoints: priceData.length,
+            timeframe,
 
             monthlyStats,
             quarterlyStats,
             dayOfWeekStats,
+            ...(hourOfDayStats && { hourOfDayStats }),
+            ...(marketSessionStats && { marketSessionStats }),
             patterns,
 
             summary: {
@@ -342,9 +461,25 @@ Uses historical data to quantify seasonal edge. Costs 1 API call per request.`,
                 avgReturn: bestDay.avgReturn,
                 winRate: bestDay.winRate,
               },
+              ...(bestHour && {
+                bestHourOfDay: {
+                  hour: bestHour.hour,
+                  avgReturn: bestHour.avgReturn,
+                  winRate: bestHour.winRate,
+                  sampleSize: bestHour.sampleSize,
+                },
+              }),
+              ...(bestSession && {
+                bestMarketSession: {
+                  session: bestSession.session,
+                  avgReturn: bestSession.avgReturn,
+                  winRate: bestSession.winRate,
+                  volatility: bestSession.volatility,
+                },
+              }),
             },
 
-            insights: generateInsights(monthlyStats, quarterlyStats, dayOfWeekStats, patterns),
+            insights: generateInsights(monthlyStats, quarterlyStats, dayOfWeekStats, patterns, hourOfDayStats, marketSessionStats),
           };
         }
       );
@@ -367,9 +502,47 @@ function generateInsights(
   monthlyStats: MonthlyStats[],
   quarterlyStats: QuarterlyStats[],
   dayOfWeekStats: DayOfWeekStats[],
-  patterns: SeasonalPattern[]
+  patterns: SeasonalPattern[],
+  hourOfDayStats?: HourOfDayStats[],
+  marketSessionStats?: MarketSessionStats[]
 ): string[] {
   const insights: string[] = [];
+
+  // Hourly insights (highest priority for hourly analysis)
+  if (hourOfDayStats && hourOfDayStats.length > 0) {
+    const strongHours = hourOfDayStats.filter(h => h.winRate > 55 && h.sampleSize > 20);
+    if (strongHours.length > 0) {
+      const topHours = strongHours.slice(0, 3).map(h => {
+        // Convert "Hour-XX" to readable time (UTC)
+        const hourNum = parseInt(h.hour.split('-')[1] || '0');
+        return `${h.hour} (${h.winRate.toFixed(1)}% win rate)`;
+      });
+      insights.push(`Strong hours: ${topHours.join(', ')}`);
+    }
+
+    const weakHours = hourOfDayStats.filter(h => h.winRate < 45 && h.sampleSize > 20);
+    if (weakHours.length > 0) {
+      const bottomHours = weakHours.slice(0, 2).map(h => h.hour);
+      insights.push(`Weak hours to avoid: ${bottomHours.join(', ')}`);
+    }
+  }
+
+  // Market session insights
+  if (marketSessionStats && marketSessionStats.length > 0) {
+    const bestSession = marketSessionStats.reduce((a, b) => a.avgReturn > b.avgReturn ? a : b);
+    if (bestSession.winRate > 55) {
+      insights.push(
+        `Best market session: ${bestSession.session} (${bestSession.winRate.toFixed(1)}% win rate, ${bestSession.avgReturn.toFixed(3)}% avg)`
+      );
+    }
+
+    const highVolSessions = marketSessionStats.filter(s => s.volatility > 0.15 && s.sampleSize > 50);
+    if (highVolSessions.length > 0) {
+      insights.push(
+        `High volatility sessions: ${highVolSessions.map(s => s.session).join(', ')} (increased risk/reward)`
+      );
+    }
+  }
 
   // Monthly insights
   const strongMonths = monthlyStats.filter(m => m.consistency > 60 && m.avgReturn > 0);
