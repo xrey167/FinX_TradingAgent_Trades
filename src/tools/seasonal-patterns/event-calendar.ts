@@ -42,6 +42,12 @@ export class EventCalendar {
   private dividendCache: Map<string, { exDates: Date[]; timestamp: number }> = new Map();
   private eodhd: any; // EODHD client instance (optional)
 
+  // Performance optimization: Event indexes for O(1) lookups
+  private eventsByYearMonth: Map<string, CalendarEvent[]> = new Map();
+  private eventsByType: Map<CalendarEvent['type'], CalendarEvent[]> = new Map();
+  private eventsByDate: Map<string, CalendarEvent[]> = new Map();
+  private weekCache: Map<string, { weekStart: Date; weekEnd: Date }> = new Map();
+
   /**
    * Default FOMC meeting dates (2024-2026)
    * Source: federalreserve.gov
@@ -163,9 +169,12 @@ export class EventCalendar {
   }
 
   constructor(config?: EventCalendarConfig) {
-    // Initialize FOMC dates
+    // Check for date expiration
+    this.checkDateExpiration();
+
+    // Initialize FOMC dates with validation
     const fomcDates = config?.fomcMeetings || EventCalendar.DEFAULT_FOMC_DATES;
-    this.fomcDates = fomcDates.map(dateStr => new Date(dateStr));
+    this.fomcDates = EventCalendar.validateDates(fomcDates, 'FOMC meeting dates');
     this.events.push(
       ...this.fomcDates.map(date => ({
         date,
@@ -176,9 +185,8 @@ export class EventCalendar {
       }))
     );
 
-    // Initialize CPI dates
-    const cpiDates = EventCalendar.DEFAULT_CPI_DATES;
-    this.cpiDates = cpiDates.map(dateStr => new Date(dateStr));
+    // Initialize CPI dates with validation
+    this.cpiDates = EventCalendar.validateDates(EventCalendar.DEFAULT_CPI_DATES, 'CPI release dates');
     this.events.push(
       ...this.cpiDates.map(date => ({
         date,
@@ -200,14 +208,18 @@ export class EventCalendar {
       this.earningsMonths = config.earningsSeasons.months;
     }
 
-    // Add election events
+    // Add election events with validation
+    const electionDates = EventCalendar.validateDates(
+      EventCalendar.ELECTION_DATES.map(e => e.date),
+      'Election dates'
+    );
     this.events.push(
-      ...EventCalendar.ELECTION_DATES.map(election => ({
-        date: new Date(election.date),
-        name: `${election.type} Election`,
+      ...electionDates.map((date, index) => ({
+        date,
+        name: `${EventCalendar.ELECTION_DATES[index]!.type} Election`,
         type: 'election' as const,
         impact: 'high' as const,
-        description: `US ${election.type} election day`,
+        description: `US ${EventCalendar.ELECTION_DATES[index]!.type} election day`,
       }))
     );
 
@@ -225,33 +237,166 @@ export class EventCalendar {
       );
     }
 
-    // Add custom events
+    // Add custom events with validation
     if (config?.customEvents) {
+      const customDates = EventCalendar.validateDates(
+        config.customEvents.map(e => e.date),
+        'Custom event dates'
+      );
       this.events.push(
-        ...config.customEvents.map(evt => ({
-          date: new Date(evt.date),
-          name: evt.name,
-          type: evt.type as CalendarEvent['type'],
-          impact: evt.impact,
-          description: evt.description,
-          ticker: evt.ticker,
+        ...customDates.map((date, index) => ({
+          date,
+          name: config.customEvents![index]!.name,
+          type: config.customEvents![index]!.type as CalendarEvent['type'],
+          impact: config.customEvents![index]!.impact,
+          description: config.customEvents![index]!.description,
+          ticker: config.customEvents![index]!.ticker,
         }))
+      );
+    }
+
+    // Build indexes for O(1) lookups
+    this.buildIndexes();
+  }
+
+  /**
+   * Validate date strings and convert to Date objects
+   * Throws descriptive errors for malformed dates
+   *
+   * @param dates - Array of date strings in ISO format (YYYY-MM-DD)
+   * @param context - Context string for error messages (e.g., "FOMC dates", "CPI dates")
+   * @returns Array of validated Date objects
+   * @throws Error if any date string is malformed or invalid
+   */
+  private static validateDates(dates: string[], context: string): Date[] {
+    return dates.map((dateStr, index) => {
+      // Check if date string format is reasonable (basic sanity check)
+      if (!dateStr || typeof dateStr !== 'string') {
+        throw new Error(
+          `Invalid date in ${context} at index ${index}: Expected string, got ${typeof dateStr}`
+        );
+      }
+
+      // Parse the date
+      const date = new Date(dateStr);
+
+      // Check if date is valid (NaN check)
+      if (isNaN(date.getTime())) {
+        throw new Error(
+          `Invalid date in ${context} at index ${index}: "${dateStr}" cannot be parsed as a valid date`
+        );
+      }
+
+      // Additional validation: Check if the parsed date matches the input string
+      // This catches cases like "2024-13-31" which would be parsed as invalid
+      const isoDate = date.toISOString().split('T')[0];
+      if (isoDate !== dateStr) {
+        throw new Error(
+          `Invalid date in ${context} at index ${index}: "${dateStr}" does not match expected format YYYY-MM-DD (parsed as ${isoDate})`
+        );
+      }
+
+      return date;
+    });
+  }
+
+  /**
+   * Check if hardcoded event dates are approaching expiration
+   * Logs a warning if any dates expire within 6 months
+   */
+  private checkDateExpiration(): void {
+    const now = new Date();
+    const sixMonthsFromNow = new Date(now.getTime() + 6 * 30 * 24 * 60 * 60 * 1000);
+
+    // Check FOMC dates
+    const latestFOMCDate = new Date(
+      Math.max(...EventCalendar.DEFAULT_FOMC_DATES.map(dateStr => new Date(dateStr).getTime()))
+    );
+
+    // Check CPI dates
+    const latestCPIDate = new Date(
+      Math.max(...EventCalendar.DEFAULT_CPI_DATES.map(dateStr => new Date(dateStr).getTime()))
+    );
+
+    // Find the earliest expiring date
+    const latestDate = latestFOMCDate > latestCPIDate ? latestFOMCDate : latestCPIDate;
+    const monthsUntilExpiry = (latestDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24 * 30);
+
+    if (monthsUntilExpiry < 6) {
+      console.warn(
+        `⚠️  Event calendar expires in ${Math.floor(monthsUntilExpiry)} months (${latestDate.toISOString().split('T')[0]}). ` +
+        `Update dates in event-calendar.ts and central-bank-extractors.ts`
       );
     }
   }
 
   /**
-   * Check if a date falls within an event week
+   * Build indexes for O(1) event lookups
+   * Called during initialization to optimize event searches
    */
-  isEventWeek(date: Date, eventType: CalendarEvent['type']): boolean {
+  private buildIndexes(): void {
+    // Clear existing indexes
+    this.eventsByYearMonth.clear();
+    this.eventsByType.clear();
+    this.eventsByDate.clear();
+
+    // Build indexes for all events
+    for (const event of this.events) {
+      // Index by year-month (YYYY-MM)
+      const yearMonth = `${event.date.getFullYear()}-${String(event.date.getMonth() + 1).padStart(2, '0')}`;
+      if (!this.eventsByYearMonth.has(yearMonth)) {
+        this.eventsByYearMonth.set(yearMonth, []);
+      }
+      this.eventsByYearMonth.get(yearMonth)!.push(event);
+
+      // Index by type
+      if (!this.eventsByType.has(event.type)) {
+        this.eventsByType.set(event.type, []);
+      }
+      this.eventsByType.get(event.type)!.push(event);
+
+      // Index by date (YYYY-MM-DD)
+      const dateKey = event.date.toISOString().split('T')[0]!;
+      if (!this.eventsByDate.has(dateKey)) {
+        this.eventsByDate.set(dateKey, []);
+      }
+      this.eventsByDate.get(dateKey)!.push(event);
+    }
+  }
+
+  /**
+   * Get cached week boundaries for a date
+   * Caches results to avoid repeated calculations
+   */
+  private getCachedWeekBoundaries(date: Date): { weekStart: Date; weekEnd: Date } {
+    const dateKey = date.toISOString().split('T')[0]!;
+
+    if (this.weekCache.has(dateKey)) {
+      return this.weekCache.get(dateKey)!;
+    }
+
     const weekStart = this.getWeekStart(date);
     const weekEnd = this.getWeekEnd(date);
+    const boundaries = { weekStart, weekEnd };
 
-    const matchingEvents = this.events.filter(
-      evt => evt.type === eventType && evt.date >= weekStart && evt.date <= weekEnd
+    this.weekCache.set(dateKey, boundaries);
+    return boundaries;
+  }
+
+  /**
+   * Check if a date falls within an event week
+   * Optimized with type-based indexing for O(1) lookup
+   */
+  isEventWeek(date: Date, eventType: CalendarEvent['type']): boolean {
+    const { weekStart, weekEnd } = this.getCachedWeekBoundaries(date);
+
+    // Get events of specified type from index (O(1) instead of O(n))
+    const eventsOfType = this.eventsByType.get(eventType) || [];
+
+    // Check if any event of this type falls within the week
+    return eventsOfType.some(
+      evt => evt.date >= weekStart && evt.date <= weekEnd
     );
-
-    return matchingEvents.length > 0;
   }
 
   /**
@@ -453,12 +598,9 @@ export class EventCalendar {
       }
     }
 
-    // Add exact date events
-    const dateStr = date.toISOString().split('T')[0];
-    const exactEvents = this.events.filter(evt => {
-      const evtDateStr = evt.date.toISOString().split('T')[0];
-      return evtDateStr === dateStr;
-    });
+    // Add exact date events using indexed lookup (O(1) instead of O(n))
+    const dateStr = date.toISOString().split('T')[0]!;
+    const exactEvents = this.eventsByDate.get(dateStr) || [];
 
     events.push(...exactEvents);
 

@@ -73,3 +73,10 @@ export {
   BoEDecisionExtractor,
   BoJDecisionExtractor,
 } from './central-bank-extractors.ts';
+
+// Export economic indicator extractors (Issue #25)
+export {
+  RetailSalesExtractor,
+  ISMExtractor,
+  JoblessClaimsExtractor,
+} from './economic-indicator-extractors.ts';
