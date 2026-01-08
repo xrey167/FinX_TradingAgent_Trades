@@ -13,11 +13,16 @@ arguments:
     default: "daily"
     description: Analysis timeframe (daily or hourly)
 examples:
-  - /analyze-seasonal AAPL.US
-  - /analyze-seasonal SPY.US 10
-  - /analyze-seasonal SPY.US 2 hourly
-  - /analyze-seasonal QQQ.US 1 hourly
-  - /analyze-seasonal SPY.US 5 daily  # includes event-based patterns
+  - /analyze-seasonal AAPL.US                    # Daily, 5 years (default)
+  - /analyze-seasonal SPY.US 10                  # Daily, 10 years
+  - /analyze-seasonal SPY.US 5 hourly            # Hourly, 5 years (not recommended - limited data)
+  - /analyze-seasonal AAPL.US 1 hourly           # Hourly, 1 year (recommended for hourly)
+  - /analyze-seasonal QQQ.US 2 hourly            # Hourly, 2 years
+  - /analyze-seasonal SPY.US 5 daily             # Daily, 5 years (explicit, includes events)
+
+# Argument Order: symbol [years] [timeframe]
+# Note: To use hourly with default years (5), specify: /analyze-seasonal SYMBOL 5 hourly
+# For hourly analysis, 1-2 years is recommended due to data availability
 ---
 
 # Analyze Seasonal Patterns

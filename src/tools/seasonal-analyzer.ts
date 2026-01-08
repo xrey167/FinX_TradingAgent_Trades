@@ -182,17 +182,43 @@ Cached for 24-48 hours depending on timeframe.`,
             const returns = data.returns.filter(r => !isNaN(r));
             const positive = returns.filter(r => r > 0).length;
 
-            // Calculate monthly aggregate returns (sum of daily returns as proxy)
-            const monthlyReturns: Record<string, number> = {};
+            // Calculate monthly aggregate returns (first to last price in each month)
+            // Group by year-month and find first/last closing prices
+            const monthlyPrices: Record<string, { first: number; last: number; firstDate: Date; lastDate: Date }> = {};
             for (let i = 0; i < priceData.length; i++) {
               const point = priceData[i];
               if (point) {
                 const pointMonth = monthNames[point.date.getMonth()];
                 if (pointMonth === month) {
                   const year = point.date.getFullYear().toString();
-                  monthlyReturns[year] = (monthlyReturns[year] || 0) + point.return;
+                  const key = year;
+
+                  if (!monthlyPrices[key]) {
+                    monthlyPrices[key] = {
+                      first: point.close,
+                      last: point.close,
+                      firstDate: point.date,
+                      lastDate: point.date
+                    };
+                  } else {
+                    // Update if this is earlier (first) or later (last) in the month
+                    if (point.date < monthlyPrices[key]!.firstDate) {
+                      monthlyPrices[key]!.first = point.close;
+                      monthlyPrices[key]!.firstDate = point.date;
+                    }
+                    if (point.date > monthlyPrices[key]!.lastDate) {
+                      monthlyPrices[key]!.last = point.close;
+                      monthlyPrices[key]!.lastDate = point.date;
+                    }
+                  }
                 }
               }
+            }
+
+            // Calculate monthly returns from first to last price
+            const monthlyReturns: Record<string, number> = {};
+            for (const [year, prices] of Object.entries(monthlyPrices)) {
+              monthlyReturns[year] = ((prices.last - prices.first) / prices.first) * 100;
             }
 
             const aggregateReturns = Object.values(monthlyReturns);
