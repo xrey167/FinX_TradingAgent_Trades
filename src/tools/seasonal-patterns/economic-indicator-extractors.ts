@@ -5,6 +5,7 @@
 
 import type { PeriodExtractor, PeriodType } from './types.ts';
 import { EventCalendar } from './event-calendar.ts';
+import { TimezoneUtil } from './timezone-utils.ts';
 
 /**
  * Retail Sales Extractor
@@ -50,8 +51,8 @@ export class RetailSalesExtractor implements PeriodExtractor {
     }
 
     // Check if in the same week
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     if (retailSalesDate >= weekStart && retailSalesDate <= weekEnd) {
       return 'Retail-Sales-Week';
@@ -174,24 +175,6 @@ export class RetailSalesExtractor implements PeriodExtractor {
     const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
     return Math.sqrt(variance);
   }
-
-  private getWeekStart(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(0, 0, 0, 0);
-    return result;
-  }
-
-  private getWeekEnd(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? 0 : 7 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(23, 59, 59, 999);
-    return result;
-  }
 }
 
 /**
@@ -238,8 +221,8 @@ export class ISMExtractor implements PeriodExtractor {
     }
 
     // Check if in the same week
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     if (ismDate >= weekStart && ismDate <= weekEnd) {
       return 'ISM-Week';
@@ -357,24 +340,6 @@ export class ISMExtractor implements PeriodExtractor {
     const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
     const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
     return Math.sqrt(variance);
-  }
-
-  private getWeekStart(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(0, 0, 0, 0);
-    return result;
-  }
-
-  private getWeekEnd(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? 0 : 7 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(23, 59, 59, 999);
-    return result;
   }
 }
 

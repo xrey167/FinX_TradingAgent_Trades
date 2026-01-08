@@ -5,6 +5,7 @@
 
 import type { PeriodExtractor, PeriodType } from './types.ts';
 import { EventCalendar } from './event-calendar.ts';
+import { TimezoneUtil } from './timezone-utils.ts';
 
 /**
  * FOMC Week Extractor
@@ -139,8 +140,8 @@ export class TripleWitchingExtractor implements PeriodExtractor {
     }
 
     // Check if in the same week
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     if (tripleWitchingDate >= weekStart && tripleWitchingDate <= weekEnd) {
       return 'Triple-Witching-Week';
@@ -265,24 +266,6 @@ export class TripleWitchingExtractor implements PeriodExtractor {
 
     return Math.sqrt(variance);
   }
-
-  private getWeekStart(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(0, 0, 0, 0);
-    return result;
-  }
-
-  private getWeekEnd(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? 0 : 7 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(23, 59, 59, 999);
-    return result;
-  }
 }
 
 /**
@@ -329,8 +312,8 @@ export class GDPExtractor implements PeriodExtractor {
     }
 
     // Check if in the same week
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     if (gdpRelease.date >= weekStart && gdpRelease.date <= weekEnd) {
       return `GDP-${gdpRelease.type}-Week`;
@@ -493,24 +476,6 @@ export class GDPExtractor implements PeriodExtractor {
     const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
 
     return Math.sqrt(variance);
-  }
-
-  private getWeekStart(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(0, 0, 0, 0);
-    return result;
-  }
-
-  private getWeekEnd(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? 0 : 7 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(23, 59, 59, 999);
-    return result;
   }
 }
 /**

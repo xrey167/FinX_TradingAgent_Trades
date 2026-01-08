@@ -774,9 +774,9 @@ export class EventCalendar {
    * CPI releases occur on 2nd/3rd week of month at 8:30 AM EST
    */
   isCPIReleaseDay(date: Date): boolean {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = date.toISOString().split('T')[0]!;
     return this.cpiDates.some(cpiDate => {
-      const cpiDateStr = cpiDate.toISOString().split('T')[0];
+      const cpiDateStr = cpiDate.toISOString().split('T')[0]!;
       return cpiDateStr === dateStr;
     });
   }
@@ -813,8 +813,8 @@ export class EventCalendar {
     const month = date.getMonth();
     const nfpDate = this.getFirstFridayOfMonth(year, month);
 
-    const dateStr = date.toISOString().split('T')[0];
-    const nfpDateStr = nfpDate.toISOString().split('T')[0];
+    const dateStr = date.toISOString().split('T')[0]!;
+    const nfpDateStr = nfpDate.toISOString().split('T')[0]!;
 
     return dateStr === nfpDateStr;
   }

@@ -217,7 +217,7 @@ getCPIEventWindow(date: Date): number | null {
 
 ### 1.4 Retail/ISM/Jobless Extractors ✅ GOOD
 
-**File:** `src/tools/seasonal-patterns/new-extractors.ts` (510 lines)
+**File:** `src/tools/seasonal-patterns/economic-indicator-extractors.ts` (510 lines)
 
 **Strengths:**
 - Good coverage of medium-impact events
@@ -226,11 +226,9 @@ getCPIEventWindow(date: Date): number | null {
 - First business day logic for ISM
 
 **Issues:**
-1. ⚠️ **Inconsistent Naming** - File named "new-extractors.ts" isn't descriptive
-   - **Impact:** Low - Maintenance confusion
-   - **Recommendation:** Rename to `medium-impact-extractors.ts` or split into individual files
+1. ✅ **RESOLVED** - File renamed from "new-extractors.ts" to "economic-indicator-extractors.ts" for better clarity
 
-**Rating:** 8.5/10
+**Rating:** 9/10
 
 ---
 
@@ -557,13 +555,10 @@ private static validateDates(dates: string[]): Date[] {
 **Issue:**
 - `cpi-nfp-extractors.ts` - specific extractors
 - `central-bank-extractors.ts` - category of extractors
-- `new-extractors.ts` - vague name
+- ✅ **RESOLVED** - Renamed to `economic-indicator-extractors.ts`
 
-**Recommendation:**
-Rename `new-extractors.ts` to `medium-impact-extractors.ts` or split into:
-- `retail-ism-extractors.ts`
-- `election-extractors.ts`
-- `dividend-rebalancing-extractors.ts`
+**Status:**
+File has been renamed from `new-extractors.ts` to `economic-indicator-extractors.ts` to better reflect its contents (Retail Sales, ISM Manufacturing PMI, and Jobless Claims economic indicators).
 
 ---
 
@@ -688,8 +683,8 @@ getCPIEventWindow(date: Date): number | null {
 
 ### 8.3 Nice to Have (Priority: LOW)
 
-5. **Rename new-extractors.ts** - More descriptive name
-   - Effort: Trivial (5 minutes)
+5. ✅ **COMPLETED: Rename new-extractors.ts** - Renamed to economic-indicator-extractors.ts
+   - Effort: Trivial (5 minutes) - DONE
 
 6. **Add Performance Benchmarks** - Verify extraction speed
    - Effort: Low (1 hour)

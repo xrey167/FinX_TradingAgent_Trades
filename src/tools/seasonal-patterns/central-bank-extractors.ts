@@ -19,6 +19,43 @@ import type { PeriodExtractor, PeriodType } from './types.ts';
 import { EventCalendar } from './event-calendar.ts';
 
 /**
+ * Validate date strings and convert to Date objects
+ * Shared utility for all extractors
+ *
+ * @param dates - Array of date strings in ISO format (YYYY-MM-DD)
+ * @param context - Context string for error messages
+ * @returns Array of validated Date objects
+ * @throws Error if any date string is malformed or invalid
+ */
+function validateDates(dates: string[], context: string): Date[] {
+  return dates.map((dateStr, index) => {
+    if (!dateStr || typeof dateStr !== 'string') {
+      throw new Error(
+        `Invalid date in ${context} at index ${index}: Expected string, got ${typeof dateStr}`
+      );
+    }
+
+    const date = new Date(dateStr);
+
+    if (isNaN(date.getTime())) {
+      throw new Error(
+        `Invalid date in ${context} at index ${index}: "${dateStr}" cannot be parsed as a valid date`
+      );
+    }
+
+    const isoDate = date.toISOString().split('T')[0];
+    if (isoDate !== dateStr) {
+      throw new Error(
+        `Invalid date in ${context} at index ${index}: "${dateStr}" does not match expected format YYYY-MM-DD (parsed as ${isoDate})`
+      );
+    }
+
+    return date;
+  });
+}
+import { TimezoneUtil } from './timezone-utils.ts';
+
+/**
  * Fed Rate Decision Day Extractor
  * Detects exact FOMC decision days and 2:00 PM EST announcement hour
  *
@@ -61,7 +98,7 @@ export class FedRateDecisionExtractor implements PeriodExtractor {
 
     if (dateStr === decisionStr) {
       // This is the decision day - check hour
-      const hour = this.getESTHour(date);
+      const hour = TimezoneUtil.getESTHour(date);
 
       if (hour === 14) {
         // 2:00 PM EST - THE announcement hour
@@ -79,8 +116,8 @@ export class FedRateDecisionExtractor implements PeriodExtractor {
     }
 
     // Check if in the same week
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     if (decisionDate >= weekStart && decisionDate <= weekEnd) {
       return 'Fed-Decision-Week';
@@ -120,7 +157,7 @@ export class FedRateDecisionExtractor implements PeriodExtractor {
     const twoPMData = hourlyData.find(d => {
       const dateStr = d.date.toISOString().split('T')[0];
       const decisionStr = decisionDate.toISOString().split('T')[0];
-      const hour = this.getESTHour(d.date);
+      const hour = TimezoneUtil.getESTHour(d.date);
       return dateStr === decisionStr && hour === 14;
     });
 
@@ -144,7 +181,7 @@ export class FedRateDecisionExtractor implements PeriodExtractor {
     // Calculate volume spike vs normal hours
     const normalHours = hourlyData.filter(d => {
       const daysDiff = Math.floor((d.date.getTime() - decisionDate.getTime()) / (1000 * 60 * 60 * 24));
-      const hour = this.getESTHour(d.date);
+      const hour = TimezoneUtil.getESTHour(d.date);
       return daysDiff >= -5 && daysDiff < 0 && hour === 14; // Same hour previous 5 days
     });
 
@@ -199,8 +236,8 @@ export class FedRateDecisionExtractor implements PeriodExtractor {
     }
 
     // Get the exact FOMC date from calendar's internal FOMC dates
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     // Access calendar's FOMC dates (through its events)
     const fomcEvents = this.calendar.getEventsForDate(date).filter(e => e.type === 'fomc');
@@ -212,66 +249,6 @@ export class FedRateDecisionExtractor implements PeriodExtractor {
     return null;
   }
 
-  /**
-   * Get hour in EST/EDT timezone
-   * Handles Daylight Saving Time conversion
-   */
-  private getESTHour(date: Date): number {
-    // Check if in DST
-    const isDST = this.isDST(date);
-
-    // EST = UTC-5, EDT = UTC-4
-    const utcOffset = isDST ? 4 : 5;
-
-    const utcHour = date.getUTCHours();
-    let estHour = utcHour - utcOffset;
-
-    // Handle negative hours (previous day)
-    if (estHour < 0) estHour += 24;
-    // Handle overflow (next day)
-    if (estHour >= 24) estHour -= 24;
-
-    return estHour;
-  }
-
-  /**
-   * Check if date is in Daylight Saving Time for US Eastern Time
-   */
-  private isDST(date: Date): boolean {
-    const year = date.getFullYear();
-
-    // DST starts: 2nd Sunday in March at 2:00 AM
-    const marchFirst = new Date(Date.UTC(year, 2, 1));
-    const marchDayOfWeek = marchFirst.getUTCDay();
-    const dstStart = new Date(Date.UTC(year, 2, 8 + ((7 - marchDayOfWeek) % 7)));
-    dstStart.setUTCHours(7, 0, 0, 0); // 2:00 AM EST = 7:00 UTC
-
-    // DST ends: 1st Sunday in November at 2:00 AM
-    const novFirst = new Date(Date.UTC(year, 10, 1));
-    const novDayOfWeek = novFirst.getUTCDay();
-    const dstEnd = new Date(Date.UTC(year, 10, 1 + ((7 - novDayOfWeek) % 7)));
-    dstEnd.setUTCHours(6, 0, 0, 0); // 2:00 AM EDT = 6:00 UTC
-
-    return date >= dstStart && date < dstEnd;
-  }
-
-  private getWeekStart(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(0, 0, 0, 0);
-    return result;
-  }
-
-  private getWeekEnd(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? 0 : 7 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(23, 59, 59, 999);
-    return result;
-  }
 }
 
 /**
@@ -305,7 +282,20 @@ export class ECBDecisionExtractor implements PeriodExtractor {
     '2026-07-23', '2026-09-10', '2026-10-29', '2026-12-17',
   ];
 
-  constructor() {}
+  /**
+   * Validated ECB decision dates (cached)
+   */
+  private static validatedDates: Date[] | null = null;
+
+  constructor() {
+    // Validate dates on first construction to fail fast
+    if (!ECBDecisionExtractor.validatedDates) {
+      ECBDecisionExtractor.validatedDates = validateDates(
+        ECBDecisionExtractor.ECB_DECISIONS,
+        'ECB decision dates'
+      );
+    }
+  }
 
   extract(timestamp: number): string | null {
     const date = new Date(timestamp);
@@ -318,7 +308,7 @@ export class ECBDecisionExtractor implements PeriodExtractor {
     const decisionStr = decisionDate.toISOString().split('T')[0];
 
     if (dateStr === decisionStr) {
-      const estHour = this.getESTHour(date);
+      const estHour = TimezoneUtil.getESTHour(date);
 
       // 7:45-9:00 AM EST: US market reacts to ECB decision
       if (estHour >= 7 && estHour < 10) {
@@ -329,8 +319,8 @@ export class ECBDecisionExtractor implements PeriodExtractor {
     }
 
     // Check if in the same week
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     if (decisionDate >= weekStart && decisionDate <= weekEnd) {
       return 'ECB-Decision-Week';
@@ -414,8 +404,8 @@ export class ECBDecisionExtractor implements PeriodExtractor {
 
     for (const decision of ECBDecisionExtractor.ECB_DECISIONS) {
       const decisionDate = new Date(decision);
-      const weekStart = this.getWeekStart(date);
-      const weekEnd = this.getWeekEnd(date);
+      const weekStart = TimezoneUtil.getWeekStart(date);
+      const weekEnd = TimezoneUtil.getWeekEnd(date);
 
       if (decisionDate >= weekStart && decisionDate <= weekEnd) {
         return decisionDate;
@@ -425,46 +415,6 @@ export class ECBDecisionExtractor implements PeriodExtractor {
     return null;
   }
 
-  private getESTHour(date: Date): number {
-    const isDST = this.isDST(date);
-    const utcOffset = isDST ? 4 : 5;
-    const utcHour = date.getUTCHours();
-    let estHour = utcHour - utcOffset;
-    if (estHour < 0) estHour += 24;
-    if (estHour >= 24) estHour -= 24;
-    return estHour;
-  }
-
-  private isDST(date: Date): boolean {
-    const year = date.getFullYear();
-    const marchFirst = new Date(Date.UTC(year, 2, 1));
-    const marchDayOfWeek = marchFirst.getUTCDay();
-    const dstStart = new Date(Date.UTC(year, 2, 8 + ((7 - marchDayOfWeek) % 7)));
-    dstStart.setUTCHours(7, 0, 0, 0);
-    const novFirst = new Date(Date.UTC(year, 10, 1));
-    const novDayOfWeek = novFirst.getUTCDay();
-    const dstEnd = new Date(Date.UTC(year, 10, 1 + ((7 - novDayOfWeek) % 7)));
-    dstEnd.setUTCHours(6, 0, 0, 0);
-    return date >= dstStart && date < dstEnd;
-  }
-
-  private getWeekStart(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(0, 0, 0, 0);
-    return result;
-  }
-
-  private getWeekEnd(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? 0 : 7 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(23, 59, 59, 999);
-    return result;
-  }
 }
 
 /**
@@ -496,7 +446,20 @@ export class BoEDecisionExtractor implements PeriodExtractor {
     '2026-08-06', '2026-09-24', '2026-11-05', '2026-12-17',
   ];
 
-  constructor() {}
+  /**
+   * Validated BoE decision dates (cached)
+   */
+  private static validatedDates: Date[] | null = null;
+
+  constructor() {
+    // Validate dates on first construction to fail fast
+    if (!BoEDecisionExtractor.validatedDates) {
+      BoEDecisionExtractor.validatedDates = validateDates(
+        BoEDecisionExtractor.BOE_DECISIONS,
+        'BoE decision dates'
+      );
+    }
+  }
 
   extract(timestamp: number): string | null {
     const date = new Date(timestamp);
@@ -508,7 +471,7 @@ export class BoEDecisionExtractor implements PeriodExtractor {
     const decisionStr = decisionDate.toISOString().split('T')[0];
 
     if (dateStr === decisionStr) {
-      const estHour = this.getESTHour(date);
+      const estHour = TimezoneUtil.getESTHour(date);
 
       // 7:00-9:00 AM EST: BoE announcement impact window
       if (estHour >= 7 && estHour < 10) {
@@ -518,8 +481,8 @@ export class BoEDecisionExtractor implements PeriodExtractor {
       return 'BoE-Decision-Day';
     }
 
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     if (decisionDate >= weekStart && decisionDate <= weekEnd) {
       return 'BoE-Decision-Week';
@@ -533,8 +496,8 @@ export class BoEDecisionExtractor implements PeriodExtractor {
 
     for (const decision of BoEDecisionExtractor.BOE_DECISIONS) {
       const decisionDate = new Date(decision);
-      const weekStart = this.getWeekStart(date);
-      const weekEnd = this.getWeekEnd(date);
+      const weekStart = TimezoneUtil.getWeekStart(date);
+      const weekEnd = TimezoneUtil.getWeekEnd(date);
 
       if (decisionDate >= weekStart && decisionDate <= weekEnd) {
         return decisionDate;
@@ -544,46 +507,6 @@ export class BoEDecisionExtractor implements PeriodExtractor {
     return null;
   }
 
-  private getESTHour(date: Date): number {
-    const isDST = this.isDST(date);
-    const utcOffset = isDST ? 4 : 5;
-    const utcHour = date.getUTCHours();
-    let estHour = utcHour - utcOffset;
-    if (estHour < 0) estHour += 24;
-    if (estHour >= 24) estHour -= 24;
-    return estHour;
-  }
-
-  private isDST(date: Date): boolean {
-    const year = date.getFullYear();
-    const marchFirst = new Date(Date.UTC(year, 2, 1));
-    const marchDayOfWeek = marchFirst.getUTCDay();
-    const dstStart = new Date(Date.UTC(year, 2, 8 + ((7 - marchDayOfWeek) % 7)));
-    dstStart.setUTCHours(7, 0, 0, 0);
-    const novFirst = new Date(Date.UTC(year, 10, 1));
-    const novDayOfWeek = novFirst.getUTCDay();
-    const dstEnd = new Date(Date.UTC(year, 10, 1 + ((7 - novDayOfWeek) % 7)));
-    dstEnd.setUTCHours(6, 0, 0, 0);
-    return date >= dstStart && date < dstEnd;
-  }
-
-  private getWeekStart(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(0, 0, 0, 0);
-    return result;
-  }
-
-  private getWeekEnd(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? 0 : 7 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(23, 59, 59, 999);
-    return result;
-  }
 }
 
 /**
@@ -616,7 +539,20 @@ export class BoJDecisionExtractor implements PeriodExtractor {
     '2026-07-31', '2026-09-18', '2026-10-30', '2026-12-18',
   ];
 
-  constructor() {}
+  /**
+   * Validated BoJ decision dates (cached)
+   */
+  private static validatedDates: Date[] | null = null;
+
+  constructor() {
+    // Validate dates on first construction to fail fast
+    if (!BoJDecisionExtractor.validatedDates) {
+      BoJDecisionExtractor.validatedDates = validateDates(
+        BoJDecisionExtractor.BOJ_DECISIONS,
+        'BoJ decision dates'
+      );
+    }
+  }
 
   extract(timestamp: number): string | null {
     const date = new Date(timestamp);
@@ -637,7 +573,7 @@ export class BoJDecisionExtractor implements PeriodExtractor {
     const prevDayStr = prevDay.toISOString().split('T')[0];
 
     if (dateStr === decisionStr || prevDayStr === decisionStr) {
-      const estHour = this.getESTHour(date);
+      const estHour = TimezoneUtil.getESTHour(date);
 
       // 8:00-11:00 PM EST (previous day): BoJ decision announcement window
       if (dateStr === decisionStr && estHour >= 20 && estHour <= 23) {
@@ -652,8 +588,8 @@ export class BoJDecisionExtractor implements PeriodExtractor {
       return 'BoJ-Decision-Day';
     }
 
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     if (decisionDate >= weekStart && decisionDate <= weekEnd) {
       return 'BoJ-Decision-Week';
@@ -667,8 +603,8 @@ export class BoJDecisionExtractor implements PeriodExtractor {
 
     for (const decision of BoJDecisionExtractor.BOJ_DECISIONS) {
       const decisionDate = new Date(decision);
-      const weekStart = this.getWeekStart(date);
-      const weekEnd = this.getWeekEnd(date);
+      const weekStart = TimezoneUtil.getWeekStart(date);
+      const weekEnd = TimezoneUtil.getWeekEnd(date);
 
       if (decisionDate >= weekStart && decisionDate <= weekEnd) {
         return decisionDate;
@@ -678,44 +614,4 @@ export class BoJDecisionExtractor implements PeriodExtractor {
     return null;
   }
 
-  private getESTHour(date: Date): number {
-    const isDST = this.isDST(date);
-    const utcOffset = isDST ? 4 : 5;
-    const utcHour = date.getUTCHours();
-    let estHour = utcHour - utcOffset;
-    if (estHour < 0) estHour += 24;
-    if (estHour >= 24) estHour -= 24;
-    return estHour;
-  }
-
-  private isDST(date: Date): boolean {
-    const year = date.getFullYear();
-    const marchFirst = new Date(Date.UTC(year, 2, 1));
-    const marchDayOfWeek = marchFirst.getUTCDay();
-    const dstStart = new Date(Date.UTC(year, 2, 8 + ((7 - marchDayOfWeek) % 7)));
-    dstStart.setUTCHours(7, 0, 0, 0);
-    const novFirst = new Date(Date.UTC(year, 10, 1));
-    const novDayOfWeek = novFirst.getUTCDay();
-    const dstEnd = new Date(Date.UTC(year, 10, 1 + ((7 - novDayOfWeek) % 7)));
-    dstEnd.setUTCHours(6, 0, 0, 0);
-    return date >= dstStart && date < dstEnd;
-  }
-
-  private getWeekStart(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(0, 0, 0, 0);
-    return result;
-  }
-
-  private getWeekEnd(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? 0 : 7 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(23, 59, 59, 999);
-    return result;
-  }
 }
