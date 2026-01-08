@@ -254,9 +254,11 @@ export class TripleWitchingExtractor implements PeriodExtractor {
   private calculateVolatility(data: Array<{ high: number; low: number; close: number }>): number {
     if (data.length < 2) return 0;
 
-    const returns = data.slice(1).map((d, i) =>
-      Math.log(d.close / data[i].close)
-    );
+    const returns = data.slice(1).map((d, i) => {
+      const prevCandle = data[i];
+      if (!prevCandle) return 0;
+      return Math.log(d.close / prevCandle.close);
+    });
 
     const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
     const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
@@ -481,9 +483,11 @@ export class GDPExtractor implements PeriodExtractor {
   private calculateVolatility(data: Array<{ high: number; low: number; close: number }>): number {
     if (data.length < 2) return 0;
 
-    const returns = data.slice(1).map((d, i) =>
-      Math.log(d.close / data[i].close)
-    );
+    const returns = data.slice(1).map((d, i) => {
+      const prevCandle = data[i];
+      if (!prevCandle) return 0;
+      return Math.log(d.close / prevCandle.close);
+    });
 
     const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
     const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;

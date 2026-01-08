@@ -1,4 +1,12 @@
 /**
+ * Additional Economic Event Extractors
+ * Retail Sales, ISM, Jobless Claims, and other medium-impact events
+ */
+
+import type { PeriodExtractor, PeriodType } from './types.ts';
+import { EventCalendar } from './event-calendar.ts';
+
+/**
  * Retail Sales Extractor
  * Identifies US Retail Sales report releases (mid-month, typically 13th-17th)
  *
@@ -151,13 +159,17 @@ export class RetailSalesExtractor implements PeriodExtractor {
       2026: [15, 17, 16, 15, 15, 16, 15, 14, 16, 16, 13, 16],
     };
 
-    const days = estimates[year] || [15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15]; // Default to 15th
+    const days = estimates[year] ?? [15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15]; // Default to 15th
     return days.map((day, month) => new Date(year, month, day));
   }
 
   private calculateVolatility(data: Array<{ high: number; low: number; close: number }>): number {
     if (data.length < 2) return 0;
-    const returns = data.slice(1).map((d, i) => Math.log(d.close / data[i].close));
+    const returns = data.slice(1).map((d, i) => {
+      const prevCandle = data[i];
+      if (!prevCandle) return 0;
+      return Math.log(d.close / prevCandle.close);
+    });
     const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
     const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
     return Math.sqrt(variance);
@@ -337,7 +349,11 @@ export class ISMExtractor implements PeriodExtractor {
 
   private calculateVolatility(data: Array<{ high: number; low: number; close: number }>): number {
     if (data.length < 2) return 0;
-    const returns = data.slice(1).map((d, i) => Math.log(d.close / data[i].close));
+    const returns = data.slice(1).map((d, i) => {
+      const prevCandle = data[i];
+      if (!prevCandle) return 0;
+      return Math.log(d.close / prevCandle.close);
+    });
     const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
     const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
     return Math.sqrt(variance);
@@ -502,7 +518,11 @@ export class JoblessClaimsExtractor implements PeriodExtractor {
 
   private calculateVolatility(data: Array<{ high: number; low: number; close: number }>): number {
     if (data.length < 2) return 0;
-    const returns = data.slice(1).map((d, i) => Math.log(d.close / data[i].close));
+    const returns = data.slice(1).map((d, i) => {
+      const prevCandle = data[i];
+      if (!prevCandle) return 0;
+      return Math.log(d.close / prevCandle.close);
+    });
     const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
     const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
     return Math.sqrt(variance);

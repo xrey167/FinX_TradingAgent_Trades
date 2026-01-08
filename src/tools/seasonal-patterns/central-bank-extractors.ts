@@ -205,7 +205,7 @@ export class FedRateDecisionExtractor implements PeriodExtractor {
     // Access calendar's FOMC dates (through its events)
     const fomcEvents = this.calendar.getEventsForDate(date).filter(e => e.type === 'fomc');
 
-    if (fomcEvents.length > 0) {
+    if (fomcEvents.length > 0 && fomcEvents[0]) {
       return fomcEvents[0].date;
     }
 
@@ -370,8 +370,20 @@ export class ECBDecisionExtractor implements PeriodExtractor {
     }
 
     // Calculate intraday move
-    const dayOpen = decisionDayData[0].open;
-    const dayClose = decisionDayData[decisionDayData.length - 1].close;
+    const firstCandle = decisionDayData[0];
+    const lastCandle = decisionDayData[decisionDayData.length - 1];
+
+    if (!firstCandle || !lastCandle) {
+      return {
+        isDecisionDay: false,
+        eurUsdMove: 0,
+        volatility: 0,
+        insights: ['Insufficient EUR/USD data for analysis'],
+      };
+    }
+
+    const dayOpen = firstCandle.open;
+    const dayClose = lastCandle.close;
     const dayHigh = Math.max(...decisionDayData.map(d => d.high));
     const dayLow = Math.min(...decisionDayData.map(d => d.low));
 
