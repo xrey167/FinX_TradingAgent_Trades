@@ -48,9 +48,6 @@ export class CPIExtractor implements PeriodExtractor {
     // Check if this is within CPI event window (T-5 to T+5)
     const windowPosition = this.calendar.getCPIEventWindow(date);
     if (windowPosition !== null) {
-      if (windowPosition === 0) {
-        return 'CPI-Release-Day';
-      }
       return `CPI-${windowPosition > 0 ? 'T+' : 'T'}${Math.abs(windowPosition)}`;
     }
 
@@ -104,9 +101,6 @@ export class NFPExtractor implements PeriodExtractor {
     // Check if this is within NFP event window (T-5 to T+5)
     const windowPosition = this.calendar.getNFPEventWindow(date);
     if (windowPosition !== null) {
-      if (windowPosition === 0) {
-        return 'NFP-Release-Day';
-      }
       return `NFP-${windowPosition > 0 ? 'T+' : 'T'}${Math.abs(windowPosition)}`;
     }
 

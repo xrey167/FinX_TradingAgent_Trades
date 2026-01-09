@@ -160,8 +160,11 @@ isElectionEventWindow(date: Date): boolean
 setEODHDClient(client: any): void
 // Sets EODHD client for API calls
 
+async estimateQuarterlyExDates(symbol: string, yearsBack: number = 5): Promise<Date[]>
+// Estimates quarterly dividend ex-dates for symbol (renamed from getDividendExDates)
+
 async getDividendExDates(symbol: string, yearsBack: number = 5): Promise<Date[]>
-// Fetches dividend ex-dates for symbol
+// @deprecated Backward compatibility alias - use estimateQuarterlyExDates() instead
 
 async isDividendExDateWindow(date: Date, symbol: string): Promise<boolean>
 // Returns true if date is T-1 (cum-dividend)

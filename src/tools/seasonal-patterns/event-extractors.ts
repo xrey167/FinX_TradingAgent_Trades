@@ -696,7 +696,7 @@ export class DividendExDateExtractor implements PeriodExtractor {
     estimatedDividend: number | null;
     insights: string[];
   }> {
-    const exDates = await this.calendar.getDividendExDates(this.symbol);
+    const exDates = await this.calendar.estimateQuarterlyExDates(this.symbol);
 
     if (exDates.length === 0) {
       return {

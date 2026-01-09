@@ -178,7 +178,8 @@ const analysis = await extractor.analyzeEventWindow(
 
 Added to `event-calendar.ts`:
 - `setEODHDClient(client)` - Set EODHD client for API calls
-- `getDividendExDates(symbol, yearsBack)` - Fetch dividend ex-dates
+- `estimateQuarterlyExDates(symbol, yearsBack)` - Estimate quarterly dividend ex-dates (renamed from getDividendExDates)
+- `getDividendExDates(symbol, yearsBack)` - Deprecated alias for backward compatibility
 - `isDividendExDateWindow(date, symbol)` - Check if date is T-1 cum-dividend
 - Per-symbol dividend cache with 24h TTL
 
@@ -306,7 +307,8 @@ Added to `event-calendar.ts`:
    - Added `isElectionEventWindow(date)` method
    - Added `isIndexRebalancingWindow(date)` method
    - Added `setEODHDClient(client)` method
-   - Added `getDividendExDates(symbol, yearsBack)` async method
+   - Added `estimateQuarterlyExDates(symbol, yearsBack)` async method (renamed from getDividendExDates)
+   - Added `getDividendExDates(symbol, yearsBack)` deprecated alias for backward compatibility
    - Added `isDividendExDateWindow(date, symbol)` async method
    - Added `dividendCache` Map for caching
    - Updated constructor to add election and rebalancing events
@@ -370,8 +372,8 @@ await calendar.isDividendExDateWindow(
 );
 // true (T-1 cum-dividend)
 
-// Get dividend ex-dates
-await calendar.getDividendExDates('AAPL.US', 5);
+// Estimate quarterly dividend ex-dates
+await calendar.estimateQuarterlyExDates('AAPL.US', 5);
 // [Date('2024-02-15'), Date('2024-05-15'), ...]
 ```
 

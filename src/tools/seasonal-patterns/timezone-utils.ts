@@ -7,6 +7,8 @@
  * Issue #22: Extracted from duplicated code in 4 central bank extractors
  */
 
+import { EventCalendar } from './event-calendar.ts';
+
 /**
  * TimezoneUtil class provides static methods for timezone conversions
  * and date calculations needed for central bank decision tracking
@@ -93,5 +95,50 @@ export class TimezoneUtil {
     result.setDate(result.getDate() + diff);
     result.setHours(23, 59, 59, 999);
     return result;
+  }
+
+  /**
+   * Check if a date is a US market holiday (NYSE/NASDAQ closure)
+   *
+   * Uses EventCalendar.isMarketHoliday() as the single source of truth
+   * for all US market holiday detection across the codebase.
+   *
+   * US Market Holidays (10 per year):
+   * 1. New Year's Day (January 1, observed if weekend)
+   * 2. Martin Luther King Jr. Day (3rd Monday in January)
+   * 3. Presidents Day (3rd Monday in February)
+   * 4. Good Friday (Friday before Easter Sunday)
+   * 5. Memorial Day (Last Monday in May)
+   * 6. Juneteenth (June 19, observed if weekend)
+   * 7. Independence Day (July 4, observed if weekend)
+   * 8. Labor Day (1st Monday in September)
+   * 9. Thanksgiving Day (4th Thursday in November)
+   * 10. Christmas Day (December 25, observed if weekend)
+   *
+   * Weekend Observation Rules:
+   * - If holiday falls on Saturday, observed on Friday
+   * - If holiday falls on Sunday, observed on Monday
+   *
+   * Source: NYSE Holiday Schedule (2024-2035)
+   *
+   * @param date - The date to check
+   * @returns true if date is a US market holiday, false otherwise
+   *
+   * @example
+   * ```typescript
+   * // Check if Christmas 2024 is a holiday
+   * const christmas = new Date('2024-12-25');
+   * console.log(TimezoneUtil.isUSMarketHoliday(christmas)); // true
+   *
+   * // Check if a regular trading day
+   * const regularDay = new Date('2024-06-15');
+   * console.log(TimezoneUtil.isUSMarketHoliday(regularDay)); // false
+   * ```
+   */
+  static isUSMarketHoliday(date: Date): boolean {
+    // Facade pattern: Delegate to EventCalendar.isMarketHoliday()
+    // EventCalendar maintains the definitive holiday calendar
+    const calendar = new EventCalendar();
+    return calendar.isMarketHoliday(date);
   }
 }

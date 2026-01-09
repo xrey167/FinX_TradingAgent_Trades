@@ -568,11 +568,11 @@ export class BoJDecisionExtractor implements PeriodExtractor {
     const decisionStr = decisionDate.toISOString().split('T')[0];
 
     // Check previous day in US (when announcement actually happens in US time)
-    const prevDay = new Date(date);
-    prevDay.setDate(prevDay.getDate() + 1);
-    const prevDayStr = prevDay.toISOString().split('T')[0];
+    const nextDayInUS = new Date(date);
+    nextDayInUS.setDate(nextDayInUS.getDate() + 1);
+    const nextDayInUSStr = nextDayInUS.toISOString().split('T')[0];
 
-    if (dateStr === decisionStr || prevDayStr === decisionStr) {
+    if (dateStr === decisionStr || nextDayInUSStr === decisionStr) {
       const estHour = TimezoneUtil.getESTHour(date);
 
       // 8:00-11:00 PM EST (previous day): BoJ decision announcement window
@@ -581,7 +581,7 @@ export class BoJDecisionExtractor implements PeriodExtractor {
       }
 
       // 1:00-4:00 AM EST: Governor press conference
-      if (prevDayStr === decisionStr && estHour >= 1 && estHour <= 4) {
+      if (nextDayInUSStr === decisionStr && estHour >= 1 && estHour <= 4) {
         return 'BoJ-Decision-PressConference';
       }
 

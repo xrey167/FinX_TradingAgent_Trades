@@ -139,6 +139,50 @@ interface SeasonalPattern {
   description: string;
 }
 
+/**
+ * Helper function to determine event impact level from event label
+ * Maps event labels (returned by extractors) to their CalendarEvent.impact property
+ *
+ * @param eventLabel - Event label string (e.g., "CPI-Release-Day", "FOMC-Week")
+ * @param calendar - EventCalendar instance to query event metadata
+ * @returns Impact level: 'high', 'medium', or 'low'
+ */
+function getEventImpact(eventLabel: string, calendar: EventCalendar): 'high' | 'medium' | 'low' {
+  // Define event label prefixes and their corresponding impact levels
+  // Based on CalendarEvent.impact property from event-calendar.ts
+  const eventImpactMap: Record<string, 'high' | 'medium' | 'low'> = {
+    // High impact events (Issue #4-#9)
+    'CPI': 'high',
+    'NFP': 'high',
+    'FOMC': 'high',
+    'Fed': 'high',
+    'Triple-Witching': 'high',
+    'GDP-Advance': 'high',
+
+    // Medium impact events (Issue #13)
+    'ECB': 'medium',
+    'BoE': 'medium',
+    'BoJ': 'medium',
+    'Options': 'medium',
+    'Election': 'medium',
+    'Earnings': 'medium',
+    'GDP-Second': 'medium',
+
+    // Low impact events
+    'GDP-Third': 'low',
+  };
+
+  // Find the first matching prefix in the event label
+  for (const [prefix, impact] of Object.entries(eventImpactMap)) {
+    if (eventLabel.includes(prefix)) {
+      return impact;
+    }
+  }
+
+  // Default to medium impact if no match found
+  return 'medium';
+}
+
 export const analyzeSeasonalTool = tool(
   'analyze_seasonal',
   `Analyze seasonal patterns and calendar effects in historical price data across multiple timeframes.
@@ -360,6 +404,32 @@ Cached for 24-48 hours depending on timeframe.`,
             };
           });
 
+          /**
+           * Helper function to calculate statistics for a period
+           * Extracts duplicated stats calculation logic used across different timeframes
+           * @param returns - Array of return values for the period
+           * @param labelKey - The key name for the label field (e.g., 'hour', 'session', 'week')
+           * @param label - The label value (e.g., 'Hour-09', 'Pre-Market', 'Week-1')
+           * @returns Object with avgReturn, winRate, and sampleSize
+           */
+          function calculatePeriodStats<K extends string>(
+            returns: number[],
+            labelKey: K,
+            label: string
+          ): Record<K, string> & { avgReturn: number; winRate: number; sampleSize: number } {
+            const filtered = returns.filter(r => !isNaN(r) && isFinite(r));
+            const positive = filtered.filter(r => r > 0).length;
+            const sum = filtered.reduce((a, b) => a + b, 0);
+            const avg = filtered.length > 0 ? sum / filtered.length : 0;
+
+            return {
+              [labelKey]: label,
+              avgReturn: isFinite(avg) ? avg : 0,
+              winRate: filtered.length > 0 ? (positive / filtered.length) * 100 : 0,
+              sampleSize: filtered.length,
+            } as Record<K, string> & { avgReturn: number; winRate: number; sampleSize: number };
+          }
+
           // Analyze hour-of-day patterns (only for hourly timeframe)
           let hourOfDayStats: HourOfDayStats[] | undefined;
           if (timeframe === 'hourly') {
@@ -375,19 +445,7 @@ Cached for 24-48 hours depending on timeframe.`,
             }
 
             hourOfDayStats = Object.entries(hourlyData)
-              .map(([hour, returns]) => {
-                const filtered = returns.filter(r => !isNaN(r) && isFinite(r));
-                const positive = filtered.filter(r => r > 0).length;
-                const sum = filtered.reduce((a, b) => a + b, 0);
-                const avg = filtered.length > 0 ? sum / filtered.length : 0;
-
-                return {
-                  hour,
-                  avgReturn: isFinite(avg) ? avg : 0,
-                  winRate: filtered.length > 0 ? (positive / filtered.length) * 100 : 0,
-                  sampleSize: filtered.length,
-                };
-              })
+              .map(([hour, returns]) => calculatePeriodStats(returns, 'hour', hour))
               .sort((a, b) => {
                 // Sort by hour number (extract from "Hour-XX" format)
                 const hourA = parseInt(a.hour.split('-')[1] || '0');
@@ -411,21 +469,17 @@ Cached for 24-48 hours depending on timeframe.`,
             }
 
             marketSessionStats = Object.entries(sessionData).map(([session, returns]) => {
+              const baseStats = calculatePeriodStats(returns, 'session', session);
               const filtered = returns.filter(r => !isNaN(r) && isFinite(r));
-              const positive = filtered.filter(r => r > 0).length;
-              const sum = filtered.reduce((a, b) => a + b, 0);
-              const mean = filtered.length > 0 ? sum / filtered.length : 0;
+              const mean = baseStats.avgReturn;
               const variance = filtered.length > 0
                 ? filtered.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / filtered.length
                 : 0;
               const volatility = Math.sqrt(variance);
 
               return {
-                session,
-                avgReturn: isFinite(mean) ? mean : 0,
-                winRate: filtered.length > 0 ? (positive / filtered.length) * 100 : 0,
+                ...baseStats,
                 volatility: isFinite(volatility) ? volatility : 0,
-                sampleSize: filtered.length,
               };
             });
           }
@@ -436,7 +490,7 @@ Cached for 24-48 hours depending on timeframe.`,
             try {
               // Try to load event calendar config (optional)
               const eventConfigPath = path.join(process.cwd(), '.claude', 'seasonal-events.json');
-              const calendar = EventCalendar.fromFile(eventConfigPath);
+              const calendar = await EventCalendar.fromFile(eventConfigPath);
 
               // Initialize all event extractors (12 total from Phase 5)
               const extractors = [
@@ -473,33 +527,20 @@ Cached for 24-48 hours depending on timeframe.`,
               }
 
               eventBasedStats = Object.entries(eventData).map(([event, returns]) => {
+                const baseStats = calculatePeriodStats(returns, 'event', event);
                 const filtered = returns.filter(r => !isNaN(r) && isFinite(r));
-                const positive = filtered.filter(r => r > 0).length;
-                const sum = filtered.reduce((a, b) => a + b, 0);
-                const mean = filtered.length > 0 ? sum / filtered.length : 0;
+                const mean = baseStats.avgReturn;
                 const variance = filtered.length > 0
                   ? filtered.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / filtered.length
                   : 0;
                 const volatility = Math.sqrt(variance);
 
-                // Determine impact level based on event type
-                let impact: 'high' | 'medium' | 'low' = 'medium';
-                if (event.includes('CPI') || event.includes('NFP') || event.includes('FOMC') ||
-                    event.includes('Fed') || event.includes('Triple-Witching') || event.includes('GDP')) {
-                  impact = 'high';
-                } else if (event.includes('ECB') || event.includes('BoE') || event.includes('BoJ') ||
-                           event.includes('Options') || event.includes('Election')) {
-                  impact = 'medium';
-                } else if (event.includes('Earnings')) {
-                  impact = 'medium';
-                }
+                // Use helper function to determine impact level from event label
+                const impact = getEventImpact(event, calendar);
 
                 return {
-                  event,
-                  avgReturn: isFinite(mean) ? mean : 0,
-                  winRate: filtered.length > 0 ? (positive / filtered.length) * 100 : 0,
+                  ...baseStats,
                   volatility: isFinite(volatility) ? volatility : 0,
-                  sampleSize: filtered.length,
                   impact,
                 };
               }).sort((a, b) => {
@@ -535,19 +576,7 @@ Cached for 24-48 hours depending on timeframe.`,
             }
 
             weekPositionStats = Object.entries(weekPosData)
-              .map(([position, returns]) => {
-                const filtered = returns.filter(r => !isNaN(r) && isFinite(r));
-                const positive = filtered.filter(r => r > 0).length;
-                const sum = filtered.reduce((a, b) => a + b, 0);
-                const avg = filtered.length > 0 ? sum / filtered.length : 0;
-
-                return {
-                  position,
-                  avgReturn: isFinite(avg) ? avg : 0,
-                  winRate: filtered.length > 0 ? (positive / filtered.length) * 100 : 0,
-                  sampleSize: filtered.length,
-                };
-              })
+              .map(([position, returns]) => calculatePeriodStats(returns, 'position', position))
               .filter(s => s.sampleSize >= 10); // Minimum sample size
 
             // Week of Month (Week-1 through Week-5)
@@ -563,19 +592,7 @@ Cached for 24-48 hours depending on timeframe.`,
             }
 
             weekOfMonthStats = Object.entries(weekOfMonthData)
-              .map(([week, returns]) => {
-                const filtered = returns.filter(r => !isNaN(r) && isFinite(r));
-                const positive = filtered.filter(r => r > 0).length;
-                const sum = filtered.reduce((a, b) => a + b, 0);
-                const avg = filtered.length > 0 ? sum / filtered.length : 0;
-
-                return {
-                  week,
-                  avgReturn: isFinite(avg) ? avg : 0,
-                  winRate: filtered.length > 0 ? (positive / filtered.length) * 100 : 0,
-                  sampleSize: filtered.length,
-                };
-              })
+              .map(([week, returns]) => calculatePeriodStats(returns, 'week', week))
               .sort((a, b) => {
                 const weekA = parseInt(a.week.split('-')[1] || '0');
                 const weekB = parseInt(b.week.split('-')[1] || '0');
@@ -595,19 +612,7 @@ Cached for 24-48 hours depending on timeframe.`,
             }
 
             dayOfMonthStats = Object.entries(dayOfMonthData)
-              .map(([day, returns]) => {
-                const filtered = returns.filter(r => !isNaN(r) && isFinite(r));
-                const positive = filtered.filter(r => r > 0).length;
-                const sum = filtered.reduce((a, b) => a + b, 0);
-                const avg = filtered.length > 0 ? sum / filtered.length : 0;
-
-                return {
-                  day,
-                  avgReturn: isFinite(avg) ? avg : 0,
-                  winRate: filtered.length > 0 ? (positive / filtered.length) * 100 : 0,
-                  sampleSize: filtered.length,
-                };
-              })
+              .map(([day, returns]) => calculatePeriodStats(returns, 'day', day))
               .filter(s => s.sampleSize >= 5) // Minimum sample size
               .sort((a, b) => {
                 const dayA = parseInt(a.day.split('-')[1] || '0');

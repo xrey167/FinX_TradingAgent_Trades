@@ -736,10 +736,45 @@ export class EventCalendar {
   }
 
   /**
-   * Get dividend ex-dates for a specific symbol
-   * Uses EODHD API fundamentals endpoint
+   * Estimate quarterly dividend ex-dates for a specific symbol
+   *
+   * IMPORTANT: This method provides ESTIMATED ex-dates based on typical quarterly
+   * dividend patterns (mid-Feb, mid-May, mid-Aug, mid-Nov). These are NOT actual
+   * historical ex-dates.
+   *
+   * Estimation Approach:
+   * 1. Fetches fundamentals data from EODHD API to verify dividend-paying status
+   * 2. If DividendYield > 0, assumes quarterly dividend pattern
+   * 3. Estimates ex-dates at 15th of typical dividend months (Feb, May, Aug, Nov)
+   * 4. Generates estimates for past `yearsBack` years through current year
+   *
+   * Why Estimates?
+   * - EODHD fundamentals endpoint does not provide historical ex-date calendar
+   * - Actual ex-dates require dedicated dividend calendar API (not currently available)
+   * - This approximation is sufficient for detecting quarterly patterns
+   *
+   * Limitations:
+   * - Does not reflect actual historical ex-dates
+   * - May not match companies with non-standard dividend schedules
+   * - Cannot detect special/extra dividends
+   * - Monthly or annual dividend stocks will have inaccurate dates
+   *
+   * Production Recommendation:
+   * - For production systems, integrate a dedicated dividend calendar API
+   * - Consider services like: IEX Cloud, Alpha Vantage, or EODHD dividend endpoint
+   *
+   * @param symbol - Stock symbol (e.g., 'AAPL.US')
+   * @param yearsBack - Number of past years to estimate (default: 5)
+   * @returns Array of estimated ex-dates (quarterly pattern)
+   *
+   * @example
+   * ```typescript
+   * // Estimate AAPL quarterly ex-dates for past 5 years
+   * const exDates = await calendar.estimateQuarterlyExDates('AAPL.US', 5);
+   * // Returns: [Date('2020-02-15'), Date('2020-05-15'), ...]
+   * ```
    */
-  async getDividendExDates(symbol: string, yearsBack: number = 5): Promise<Date[]> {
+  async estimateQuarterlyExDates(symbol: string, yearsBack: number = 5): Promise<Date[]> {
     // Check cache first (TTL: 24 hours)
     const cached = this.dividendCache.get(symbol);
     if (cached && Date.now() - cached.timestamp < 24 * 60 * 60 * 1000) {
@@ -792,6 +827,21 @@ export class EventCalendar {
   }
 
   /**
+   * @deprecated Use estimateQuarterlyExDates() instead. This method will be removed in a future version.
+   *
+   * Backward compatibility alias for estimateQuarterlyExDates().
+   * The new name better reflects that this method estimates ex-dates rather than
+   * fetching actual historical data.
+   *
+   * @param symbol - Stock symbol (e.g., 'AAPL.US')
+   * @param yearsBack - Number of past years to estimate (default: 5)
+   * @returns Array of estimated ex-dates (quarterly pattern)
+   */
+  async getDividendExDates(symbol: string, yearsBack: number = 5): Promise<Date[]> {
+    return this.estimateQuarterlyExDates(symbol, yearsBack);
+  }
+
+  /**
    * Get events by type within a date range
    * Uses existing eventsByType index for O(1) lookup
    *
@@ -819,7 +869,7 @@ export class EventCalendar {
    * Per-symbol basis
    */
   async isDividendExDateWindow(date: Date, symbol: string): Promise<boolean> {
-    const exDates = await this.getDividendExDates(symbol);
+    const exDates = await this.estimateQuarterlyExDates(symbol);
 
     for (const exDate of exDates) {
       const daysFromExDate = Math.floor((date.getTime() - exDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -939,10 +989,10 @@ export class EventCalendar {
   /**
    * Load calendar config from file
    */
-  static fromFile(filePath: string): EventCalendar {
+  static async fromFile(filePath: string): Promise<EventCalendar> {
     try {
-      const fs = require('fs');
-      const configData = fs.readFileSync(filePath, 'utf-8');
+      const { readFileSync } = await import('fs');
+      const configData = readFileSync(filePath, 'utf-8');
       const config = JSON.parse(configData) as EventCalendarConfig;
       return new EventCalendar(config);
     } catch (error) {

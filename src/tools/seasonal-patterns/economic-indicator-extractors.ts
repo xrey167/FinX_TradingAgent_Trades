@@ -316,12 +316,12 @@ export class ISMExtractor implements PeriodExtractor {
 
     for (let month = 0; month < 12; month++) {
       let day = 1;
-      let date = new Date(year, month, day);
+      let date = new Date(Date.UTC(year, month, day));
 
-      // Move to first business day (Monday-Friday)
-      while (date.getDay() === 0 || date.getDay() === 6) {
+      // Move to first business day (Monday-Friday, excluding holidays)
+      while (date.getUTCDay() === 0 || date.getUTCDay() === 6 || this.calendar.isMarketHoliday(date)) {
         day++;
-        date = new Date(year, month, day);
+        date = new Date(Date.UTC(year, month, day));
       }
 
       dates.push(date);
@@ -379,7 +379,7 @@ export class JoblessClaimsExtractor implements PeriodExtractor {
     if (date.getDay() !== 4) return null;
 
     // Check if this Thursday is a major holiday
-    if (this.isHoliday(date)) return null;
+    if (TimezoneUtil.isUSMarketHoliday(date)) return null;
 
     return 'Jobless-Claims-Day';
   }
@@ -400,12 +400,12 @@ export class JoblessClaimsExtractor implements PeriodExtractor {
   } {
     const insights: string[] = [];
     const isThursday = date.getDay() === 4;
-    const isHoliday = this.isHoliday(date);
+    const isHoliday = TimezoneUtil.isUSMarketHoliday(date);
 
     if (!isThursday || isHoliday) {
       // Find next Thursday
       let nextThursday = new Date(date);
-      while (nextThursday.getDay() !== 4 || this.isHoliday(nextThursday)) {
+      while (nextThursday.getDay() !== 4 || TimezoneUtil.isUSMarketHoliday(nextThursday)) {
         nextThursday.setDate(nextThursday.getDate() + 1);
       }
 
@@ -451,34 +451,6 @@ export class JoblessClaimsExtractor implements PeriodExtractor {
       hourlyVolatility,
       insights,
     };
-  }
-
-  /**
-   * Check if date is a major US holiday (no jobless claims release)
-   */
-  private isHoliday(date: Date): boolean {
-    const month = date.getMonth();
-    const day = date.getDate();
-
-    // Major holidays that affect jobless claims release
-    // New Year's Day
-    if (month === 0 && day === 1) return true;
-
-    // Independence Day
-    if (month === 6 && day === 4) return true;
-
-    // Thanksgiving (4th Thursday of November)
-    if (month === 10) {
-      const firstDay = new Date(date.getFullYear(), 10, 1);
-      const firstThursday = firstDay.getDay() <= 4 ? 5 - firstDay.getDay() : 12 - firstDay.getDay();
-      const thanksgiving = firstThursday + 21; // 4th Thursday
-      if (day === thanksgiving) return true;
-    }
-
-    // Christmas
-    if (month === 11 && day === 25) return true;
-
-    return false;
   }
 
   private calculateVolatility(data: Array<{ high: number; low: number; close: number }>): number {
