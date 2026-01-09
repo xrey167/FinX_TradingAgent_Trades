@@ -12,6 +12,7 @@
 import type { PeriodExtractor, PeriodType, CandleData } from './types.ts';
 import type { CalendarEvent } from './event-calendar.ts';
 import { EventCalendar } from './event-calendar.ts';
+import { TimezoneUtil } from './timezone-utils.ts';
 
 /**
  * Supported event combination types
@@ -143,8 +144,8 @@ export class CombinedEventExtractor implements PeriodExtractor {
    * Returns the most impactful combination or null
    */
   detectEventCombination(date: Date): EventCombination | null {
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     // Collect all high-impact events in this week
     const eventsInWeek = this.getHighImpactEventsInWeek(date);
@@ -190,8 +191,8 @@ export class CombinedEventExtractor implements PeriodExtractor {
    * Get all high and medium impact events in the week containing the date
    */
   private getHighImpactEventsInWeek(date: Date): CalendarEvent[] {
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     const events: CalendarEvent[] = [];
     const uniqueEventKeys = new Set<string>();
@@ -399,27 +400,4 @@ export class CombinedEventExtractor implements PeriodExtractor {
     return CombinedEventExtractor.VOLATILITY_MULTIPLIERS[type];
   }
 
-  /**
-   * Get start of week (Monday)
-   */
-  private getWeekStart(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? -6 : 1 - day; // Sunday = -6, others = 1 - day
-    result.setDate(result.getDate() + diff);
-    result.setHours(0, 0, 0, 0);
-    return result;
-  }
-
-  /**
-   * Get end of week (Sunday)
-   */
-  private getWeekEnd(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? 0 : 7 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(23, 59, 59, 999);
-    return result;
-  }
 }

@@ -4,6 +4,7 @@
  */
 
 import type { PeriodExtractor, PeriodType } from './types.ts';
+import { TimezoneUtil } from './timezone-utils.ts';
 
 /**
  * Hour of Day Extractor
@@ -31,35 +32,13 @@ export class MarketSessionExtractor implements PeriodExtractor {
   type: PeriodType = 'market-session';
   requiredTimeframe = 'hourly' as const;
 
-  /**
-   * Check if a date is in Daylight Saving Time (DST) for US Eastern Time
-   * DST runs from 2nd Sunday in March at 2:00 AM to 1st Sunday in November at 2:00 AM
-   */
-  private isDST(date: Date): boolean {
-    const year = date.getFullYear();
-
-    // Find 2nd Sunday in March
-    const marchFirst = new Date(Date.UTC(year, 2, 1)); // March 1st UTC
-    const marchDayOfWeek = marchFirst.getUTCDay();
-    const dstStart = new Date(Date.UTC(year, 2, 8 + ((7 - marchDayOfWeek) % 7))); // 2nd Sunday
-    dstStart.setUTCHours(7, 0, 0, 0); // 2:00 AM EST = 7:00 UTC
-
-    // Find 1st Sunday in November
-    const novFirst = new Date(Date.UTC(year, 10, 1)); // November 1st UTC
-    const novDayOfWeek = novFirst.getUTCDay();
-    const dstEnd = new Date(Date.UTC(year, 10, 1 + ((7 - novDayOfWeek) % 7))); // 1st Sunday
-    dstEnd.setUTCHours(6, 0, 0, 0); // 2:00 AM EDT = 6:00 UTC
-
-    return date >= dstStart && date < dstEnd;
-  }
-
   extract(timestamp: number): string | null {
     const date = new Date(timestamp);
 
     // Determine UTC offset based on DST
     // EST (winter): UTC-5 (5 hours behind)
     // EDT (summer/DST): UTC-4 (4 hours behind)
-    const utcOffset = this.isDST(date) ? 4 : 5;
+    const utcOffset = TimezoneUtil.isDST(date) ? 4 : 5;
 
     const hour = date.getUTCHours();
     const minute = date.getUTCMinutes();
