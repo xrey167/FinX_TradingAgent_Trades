@@ -6,6 +6,7 @@
 import type { PeriodExtractor, PeriodType } from './types.ts';
 import { EventCalendar } from './event-calendar.ts';
 import { TimezoneUtil } from './timezone-utils.ts';
+import { calculateVolatility } from '../../lib/statistical-utils.ts';
 
 /**
  * Retail Sales Extractor
@@ -43,8 +44,8 @@ export class RetailSalesExtractor implements PeriodExtractor {
     if (!retailSalesDate) return null;
 
     // Check if this is the exact day
-    const dateStr = date.toISOString().split('T')[0];
-    const salesDateStr = retailSalesDate.toISOString().split('T')[0];
+    const dateStr = TimezoneUtil.formatISODate(date);
+    const salesDateStr = TimezoneUtil.formatISODate(retailSalesDate);
 
     if (dateStr === salesDateStr) {
       return 'Retail-Sales-Day';
@@ -115,13 +116,14 @@ export class RetailSalesExtractor implements PeriodExtractor {
     const hourlyData = priceData.filter(d => d.timestamp !== undefined);
     if (hourlyData.length > 0) {
       const releaseHourData = hourlyData.filter(d => {
-        const hour = new Date(d.timestamp!).getUTCHours();
+        if (!d.timestamp) return false;
+        const hour = new Date(d.timestamp).getUTCHours();
         // 8:30 AM EST = 13:30 UTC (winter) or 12:30 UTC (summer)
         return hour >= 12 && hour <= 14;
       });
 
       if (releaseHourData.length > 0) {
-        hourlyVolatility = this.calculateVolatility(releaseHourData);
+        hourlyVolatility = calculateVolatility(releaseHourData);
         if (hourlyVolatility > 0.01) {
           insights.push(`High intraday volatility detected: ${(hourlyVolatility * 100).toFixed(2)}%`);
         }
@@ -163,18 +165,6 @@ export class RetailSalesExtractor implements PeriodExtractor {
     const days = estimates[year] ?? [15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15]; // Default to 15th
     return days.map((day, month) => new Date(year, month, day));
   }
-
-  private calculateVolatility(data: Array<{ high: number; low: number; close: number }>): number {
-    if (data.length < 2) return 0;
-    const returns = data.slice(1).map((d, i) => {
-      const prevCandle = data[i];
-      if (!prevCandle) return 0;
-      return Math.log(d.close / prevCandle.close);
-    });
-    const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
-    return Math.sqrt(variance);
-  }
 }
 
 /**
@@ -213,8 +203,8 @@ export class ISMExtractor implements PeriodExtractor {
     if (!ismDate) return null;
 
     // Check if this is the exact day
-    const dateStr = date.toISOString().split('T')[0];
-    const ismDateStr = ismDate.toISOString().split('T')[0];
+    const dateStr = TimezoneUtil.formatISODate(date);
+    const ismDateStr = TimezoneUtil.formatISODate(ismDate);
 
     if (dateStr === ismDateStr) {
       return 'ISM-Day';
@@ -276,13 +266,14 @@ export class ISMExtractor implements PeriodExtractor {
     const hourlyData = priceData.filter(d => d.timestamp !== undefined);
     if (hourlyData.length > 0) {
       const releaseHourData = hourlyData.filter(d => {
-        const hour = new Date(d.timestamp!).getUTCHours();
+        if (!d.timestamp) return false;
+        const hour = new Date(d.timestamp).getUTCHours();
         // 10:00 AM EST = 15:00 UTC (winter) or 14:00 UTC (summer)
         return hour >= 14 && hour <= 16;
       });
 
       if (releaseHourData.length > 0) {
-        hourlyVolatility = this.calculateVolatility(releaseHourData);
+        hourlyVolatility = calculateVolatility(releaseHourData);
         if (hourlyVolatility > 0.01) {
           insights.push(`High intraday volatility detected: ${(hourlyVolatility * 100).toFixed(2)}%`);
         }
@@ -319,27 +310,27 @@ export class ISMExtractor implements PeriodExtractor {
       let date = new Date(Date.UTC(year, month, day));
 
       // Move to first business day (Monday-Friday, excluding holidays)
-      while (date.getUTCDay() === 0 || date.getUTCDay() === 6 || this.calendar.isMarketHoliday(date)) {
+      while (true) {
+        const isWeekend = date.getUTCDay() === 0 || date.getUTCDay() === 6;
+        const isHoliday = this.calendar.isMarketHoliday(date);
+
+        if (!isWeekend && !isHoliday) {
+          break; // Found first business day
+        }
+
         day++;
         date = new Date(Date.UTC(year, month, day));
+
+        // Safety: prevent infinite loop if month has no valid days
+        if (day > 31) {
+          throw new Error(`Could not find business day in ${year}-${month + 1}`);
+        }
       }
 
       dates.push(date);
     }
 
     return dates;
-  }
-
-  private calculateVolatility(data: Array<{ high: number; low: number; close: number }>): number {
-    if (data.length < 2) return 0;
-    const returns = data.slice(1).map((d, i) => {
-      const prevCandle = data[i];
-      if (!prevCandle) return 0;
-      return Math.log(d.close / prevCandle.close);
-    });
-    const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
-    return Math.sqrt(variance);
   }
 }
 
@@ -431,13 +422,14 @@ export class JoblessClaimsExtractor implements PeriodExtractor {
     const hourlyData = priceData.filter(d => d.timestamp !== undefined);
     if (hourlyData.length > 0) {
       const releaseHourData = hourlyData.filter(d => {
-        const hour = new Date(d.timestamp!).getUTCHours();
+        if (!d.timestamp) return false;
+        const hour = new Date(d.timestamp).getUTCHours();
         // 8:30 AM EST = 13:30 UTC (winter) or 12:30 UTC (summer)
         return hour >= 12 && hour <= 14;
       });
 
       if (releaseHourData.length > 0) {
-        hourlyVolatility = this.calculateVolatility(releaseHourData);
+        hourlyVolatility = calculateVolatility(releaseHourData);
         if (hourlyVolatility > 0.01) {
           insights.push(`High intraday volatility detected: ${(hourlyVolatility * 100).toFixed(2)}%`);
         }
@@ -451,17 +443,5 @@ export class JoblessClaimsExtractor implements PeriodExtractor {
       hourlyVolatility,
       insights,
     };
-  }
-
-  private calculateVolatility(data: Array<{ high: number; low: number; close: number }>): number {
-    if (data.length < 2) return 0;
-    const returns = data.slice(1).map((d, i) => {
-      const prevCandle = data[i];
-      if (!prevCandle) return 0;
-      return Math.log(d.close / prevCandle.close);
-    });
-    const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
-    return Math.sqrt(variance);
   }
 }
