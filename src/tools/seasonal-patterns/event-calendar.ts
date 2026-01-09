@@ -4,6 +4,7 @@
  */
 
 import type { MarketSector } from './sector-definitions.ts';
+import { TimezoneUtil } from './timezone-utils.ts';
 
 export interface CalendarEvent {
   date: Date;
@@ -439,8 +440,8 @@ export class EventCalendar {
       return this.weekCache.get(dateKey)!;
     }
 
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
     const boundaries = { weekStart, weekEnd };
 
     this.weekCache.set(dateKey, boundaries);
@@ -470,8 +471,8 @@ export class EventCalendar {
     if (!this.optionsExpiryEnabled) return false;
 
     const expiryDate = this.getMonthlyOptionsExpiry(date.getFullYear(), date.getMonth());
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     return expiryDate >= weekStart && expiryDate <= weekEnd;
   }
@@ -503,8 +504,8 @@ export class EventCalendar {
     if (![2, 5, 8, 11].includes(month)) return false;
 
     const tripleWitchingDate = this.getMonthlyOptionsExpiry(date.getFullYear(), month);
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     return tripleWitchingDate >= weekStart && tripleWitchingDate <= weekEnd;
   }
@@ -514,8 +515,8 @@ export class EventCalendar {
    */
   isGDPReleaseWeek(date: Date): boolean {
     const releases = this.getGDPReleasesForYear(date.getFullYear());
-    const weekStart = this.getWeekStart(date);
-    const weekEnd = this.getWeekEnd(date);
+    const weekStart = TimezoneUtil.getWeekStart(date);
+    const weekEnd = TimezoneUtil.getWeekEnd(date);
 
     return releases.some(release => release.date >= weekStart && release.date <= weekEnd);
   }
@@ -597,8 +598,8 @@ export class EventCalendar {
 
     if (this.isGDPReleaseWeek(date)) {
       const releases = this.getGDPReleasesForYear(date.getFullYear());
-      const weekStart = this.getWeekStart(date);
-      const weekEnd = this.getWeekEnd(date);
+      const weekStart = TimezoneUtil.getWeekStart(date);
+      const weekEnd = TimezoneUtil.getWeekEnd(date);
       const release = releases.find(r => r.date >= weekStart && r.date <= weekEnd);
 
       if (release) {
@@ -692,30 +693,6 @@ export class EventCalendar {
 
     // Fallback: return last day of month if 3rd Friday not found
     return new Date(year, month + 1, 0);
-  }
-
-  /**
-   * Get start of week (Monday)
-   */
-  private getWeekStart(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? -6 : 1 - day; // Sunday = -6, others = 1 - day
-    result.setDate(result.getDate() + diff);
-    result.setHours(0, 0, 0, 0);
-    return result;
-  }
-
-  /**
-   * Get end of week (Sunday)
-   */
-  private getWeekEnd(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? 0 : 7 - day;
-    result.setDate(result.getDate() + diff);
-    result.setHours(23, 59, 59, 999);
-    return result;
   }
 
   /**
