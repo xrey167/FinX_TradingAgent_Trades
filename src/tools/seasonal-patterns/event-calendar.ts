@@ -108,6 +108,11 @@ export class EventCalendar {
   ];
 
   /**
+   * Set for O(1) holiday lookups
+   */
+  private static readonly holidaySet = new Set(EventCalendar.US_MARKET_HOLIDAYS);
+
+  /**
    * Default FOMC meeting dates (2024-2026)
    * Source: federalreserve.gov
    */
@@ -951,7 +956,7 @@ export class EventCalendar {
    */
   isMarketHoliday(date: Date): boolean {
     const dateStr = date.toISOString().split('T')[0];
-    return EventCalendar.US_MARKET_HOLIDAYS.includes(dateStr!);
+    return EventCalendar.holidaySet.has(dateStr!);
   }
 
   /**

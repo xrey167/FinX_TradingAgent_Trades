@@ -114,6 +114,18 @@ export class EventWindowExtractor implements PeriodExtractor {
   // Cache for event dates to avoid repeated calculations
   private eventDatesCache: Map<string, Date[]> = new Map();
 
+  /**
+   * Event types that support O(1) direct lookup via calendar's eventsByType index
+   */
+  private static readonly DIRECT_LOOKUP_TYPES = new Set<CalendarEvent['type']>([
+    'fomc',
+    'economic',
+    'political',
+    'custom',
+    'election',
+    'index-rebalancing',
+  ]);
+
   constructor(protected calendar: EventCalendar, config: EventWindowConfig) {
     this.eventType = config.eventType;
     this.windowSize = config.windowSize ?? 5;
@@ -319,18 +331,7 @@ export class EventWindowExtractor implements PeriodExtractor {
    * Returns true for event types stored in calendar's eventsByType index
    */
   private canUseDirectLookup(eventType: CalendarEvent['type']): boolean {
-    // Event types that are stored directly in the calendar's events array
-    // and can be retrieved via getEventsByType() with O(1) lookup
-    const directLookupTypes: CalendarEvent['type'][] = [
-      'fomc',
-      'economic',
-      'political',
-      'custom',
-      'election',
-      'index-rebalancing',
-    ];
-
-    return directLookupTypes.includes(eventType);
+    return EventWindowExtractor.DIRECT_LOOKUP_TYPES.has(eventType);
   }
 
   /**
