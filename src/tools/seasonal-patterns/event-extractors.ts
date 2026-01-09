@@ -6,6 +6,7 @@
 import type { PeriodExtractor, PeriodType } from './types.ts';
 import { EventCalendar } from './event-calendar.ts';
 import { TimezoneUtil } from './timezone-utils.ts';
+import { calculateVolatility } from '../../lib/statistical-utils.ts';
 
 /**
  * FOMC Week Extractor
@@ -132,8 +133,8 @@ export class TripleWitchingExtractor implements PeriodExtractor {
     const tripleWitchingDate = this.getTripleWitchingDate(date.getFullYear(), month);
 
     // Check if this is the exact day
-    const dateStr = date.toISOString().split('T')[0];
-    const witchingDateStr = tripleWitchingDate.toISOString().split('T')[0];
+    const dateStr = TimezoneUtil.formatISODate(date);
+    const witchingDateStr = TimezoneUtil.formatISODate(tripleWitchingDate);
 
     if (dateStr === witchingDateStr) {
       return 'Triple-Witching-Day';
@@ -199,13 +200,13 @@ export class TripleWitchingExtractor implements PeriodExtractor {
       avgVolumeSpike = eventVolume / normalVolume;
 
       // Calculate volatility
-      const normalVolatility = this.calculateVolatility(
+      const normalVolatility = calculateVolatility(
         priceData.filter(d => {
           const daysDiff = Math.floor((d.date.getTime() - tripleWitchingDate.getTime()) / (1000 * 60 * 60 * 24));
           return daysDiff < -14 && daysDiff >= -30;
         })
       );
-      const eventVolatility = this.calculateVolatility(eventWindowData);
+      const eventVolatility = calculateVolatility(eventWindowData);
       volatilityIncrease = (eventVolatility - normalVolatility) / normalVolatility;
 
       if (avgVolumeSpike > 2.0) {
@@ -248,24 +249,6 @@ export class TripleWitchingExtractor implements PeriodExtractor {
     // Fallback (should not reach here)
     return new Date(year, month + 1, 0);
   }
-
-  /**
-   * Calculate volatility (standard deviation of returns)
-   */
-  private calculateVolatility(data: Array<{ high: number; low: number; close: number }>): number {
-    if (data.length < 2) return 0;
-
-    const returns = data.slice(1).map((d, i) => {
-      const prevCandle = data[i];
-      if (!prevCandle) return 0;
-      return Math.log(d.close / prevCandle.close);
-    });
-
-    const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
-
-    return Math.sqrt(variance);
-  }
 }
 
 /**
@@ -304,8 +287,8 @@ export class GDPExtractor implements PeriodExtractor {
     if (!gdpRelease) return null;
 
     // Check if this is the exact release day
-    const dateStr = date.toISOString().split('T')[0];
-    const releaseStr = gdpRelease.date.toISOString().split('T')[0];
+    const dateStr = TimezoneUtil.formatISODate(date);
+    const releaseStr = TimezoneUtil.formatISODate(gdpRelease.date);
 
     if (dateStr === releaseStr) {
       return `GDP-${gdpRelease.type}-Day`;
@@ -380,7 +363,7 @@ export class GDPExtractor implements PeriodExtractor {
     });
 
     if (preReleaseData.length > 0) {
-      const volatility = this.calculateVolatility(preReleaseData);
+      const volatility = calculateVolatility(preReleaseData);
       if (volatility > 0.02) {
         insights.push('Elevated pre-release volatility detected');
       }
@@ -459,25 +442,8 @@ export class GDPExtractor implements PeriodExtractor {
       { date: new Date(year, 11, 21), type: 'Third' as const, quarter: `Q3-${year}` },
     ];
   }
-
-  /**
-   * Calculate volatility (standard deviation of returns)
-   */
-  private calculateVolatility(data: Array<{ high: number; low: number; close: number }>): number {
-    if (data.length < 2) return 0;
-
-    const returns = data.slice(1).map((d, i) => {
-      const prevCandle = data[i];
-      if (!prevCandle) return 0;
-      return Math.log(d.close / prevCandle.close);
-    });
-
-    const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
-
-    return Math.sqrt(variance);
-  }
 }
+
 /**
  * Election Extractor
  * Identifies US election periods (Presidential and Midterm elections)
@@ -514,8 +480,8 @@ export class ElectionExtractor implements PeriodExtractor {
     if (!electionInfo) return null;
 
     // Check if this is the exact election day
-    const dateStr = date.toISOString().split('T')[0];
-    const electionStr = electionInfo.date.toISOString().split('T')[0];
+    const dateStr = TimezoneUtil.formatISODate(date);
+    const electionStr = TimezoneUtil.formatISODate(electionInfo.date);
 
     if (dateStr === electionStr) {
       return `${electionInfo.type}-Election-Day`;
@@ -755,12 +721,12 @@ export class DividendExDateExtractor implements PeriodExtractor {
     // Estimate dividend from price drop (if ex-date is in historical data)
     let estimatedDividend: number | null = null;
     const exDateData = priceData.find(
-      d => d.date.toISOString().split('T')[0] === nearestExDate!.toISOString().split('T')[0]
+      d => TimezoneUtil.formatISODate(d.date) === TimezoneUtil.formatISODate(nearestExDate!)
     );
     const prevDateData = priceData.find(d => {
       const prevDate = new Date(nearestExDate!);
       prevDate.setDate(prevDate.getDate() - 1);
-      return d.date.toISOString().split('T')[0] === prevDate.toISOString().split('T')[0];
+      return TimezoneUtil.formatISODate(d.date) === TimezoneUtil.formatISODate(prevDate);
     });
 
     if (exDateData && prevDateData) {
@@ -816,8 +782,8 @@ export class IndexRebalancingExtractor implements PeriodExtractor {
     if (!rebalancingInfo) return null;
 
     // Check if this is the exact rebalancing day
-    const dateStr = date.toISOString().split('T')[0];
-    const rebalancingStr = rebalancingInfo.date.toISOString().split('T')[0];
+    const dateStr = TimezoneUtil.formatISODate(date);
+    const rebalancingStr = TimezoneUtil.formatISODate(rebalancingInfo.date);
 
     if (dateStr === rebalancingStr) {
       return `${rebalancingInfo.index === 'S&P 500' ? 'SP500' : 'Russell'}-Rebalancing-Day`;

@@ -827,21 +827,6 @@ export class EventCalendar {
   }
 
   /**
-   * @deprecated Use estimateQuarterlyExDates() instead. This method will be removed in a future version.
-   *
-   * Backward compatibility alias for estimateQuarterlyExDates().
-   * The new name better reflects that this method estimates ex-dates rather than
-   * fetching actual historical data.
-   *
-   * @param symbol - Stock symbol (e.g., 'AAPL.US')
-   * @param yearsBack - Number of past years to estimate (default: 5)
-   * @returns Array of estimated ex-dates (quarterly pattern)
-   */
-  async getDividendExDates(symbol: string, yearsBack: number = 5): Promise<Date[]> {
-    return this.estimateQuarterlyExDates(symbol, yearsBack);
-  }
-
-  /**
    * Get events by type within a date range
    * Uses existing eventsByType index for O(1) lookup
    *

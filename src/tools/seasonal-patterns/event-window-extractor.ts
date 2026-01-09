@@ -115,6 +115,12 @@ export class EventWindowExtractor implements PeriodExtractor {
   private eventDatesCache: Map<string, Date[]> = new Map();
 
   /**
+   * Maximum cache size (LRU eviction when exceeded)
+   * Prevents unbounded memory growth for long-running applications
+   */
+  private readonly MAX_CACHE_SIZE = 1000;
+
+  /**
    * Event types that support O(1) direct lookup via calendar's eventsByType index
    */
   private static readonly DIRECT_LOOKUP_TYPES = new Set<CalendarEvent['type']>([
@@ -136,6 +142,26 @@ export class EventWindowExtractor implements PeriodExtractor {
 
     // Determine label prefix based on event type
     this.labelPrefix = config.labelPrefix ?? this.getDefaultLabelPrefix(config.eventType);
+  }
+
+  /**
+   * Add entry to cache with LRU eviction
+   *
+   * When cache exceeds MAX_CACHE_SIZE, removes the oldest entry (first key in Map).
+   * JavaScript Map maintains insertion order, so first key = least recently used.
+   *
+   * @param key - Cache key
+   * @param value - Event dates to cache
+   */
+  private addToCache(key: string, value: Date[]): void {
+    // Evict oldest entry if cache is full
+    if (this.eventDatesCache.size >= this.MAX_CACHE_SIZE) {
+      const firstKey = this.eventDatesCache.keys().next().value;
+      if (firstKey) {
+        this.eventDatesCache.delete(firstKey);
+      }
+    }
+    this.eventDatesCache.set(key, value);
   }
 
   /**
@@ -298,7 +324,7 @@ export class EventWindowExtractor implements PeriodExtractor {
     if (this.canUseDirectLookup(this.eventType)) {
       const events = this.calendar.getEventsByType(this.eventType, startDate, endDate);
       const extractedDates = events.map(e => e.date);
-      this.eventDatesCache.set(cacheKey, extractedDates);
+      this.addToCache(cacheKey, extractedDates);
       return extractedDates;
     }
 
@@ -322,7 +348,7 @@ export class EventWindowExtractor implements PeriodExtractor {
       }
     }
 
-    this.eventDatesCache.set(cacheKey, dates);
+    this.addToCache(cacheKey, dates);
     return dates;
   }
 

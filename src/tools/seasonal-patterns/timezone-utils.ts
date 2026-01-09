@@ -15,6 +15,12 @@ import { EventCalendar } from './event-calendar.ts';
  */
 export class TimezoneUtil {
   /**
+   * Singleton EventCalendar instance for holiday checking
+   * Lazily initialized on first use
+   */
+  private static calendarInstance: EventCalendar | null = null;
+
+  /**
    * Get hour in EST/EDT timezone
    * Handles Daylight Saving Time conversion
    *
@@ -138,7 +144,26 @@ export class TimezoneUtil {
   static isUSMarketHoliday(date: Date): boolean {
     // Facade pattern: Delegate to EventCalendar.isMarketHoliday()
     // EventCalendar maintains the definitive holiday calendar
-    const calendar = new EventCalendar();
-    return calendar.isMarketHoliday(date);
+    // Use singleton pattern to avoid creating new instance on every call
+    if (!TimezoneUtil.calendarInstance) {
+      TimezoneUtil.calendarInstance = new EventCalendar();
+    }
+    return TimezoneUtil.calendarInstance.isMarketHoliday(date);
+  }
+
+  /**
+   * Format Date as ISO date string (YYYY-MM-DD)
+   *
+   * @param date - The date to format
+   * @returns ISO date string in YYYY-MM-DD format
+   *
+   * @example
+   * ```typescript
+   * const date = new Date('2024-12-25');
+   * console.log(TimezoneUtil.formatISODate(date)); // "2024-12-25"
+   * ```
+   */
+  static formatISODate(date: Date): string {
+    return date.toISOString().split('T')[0]!;
   }
 }
